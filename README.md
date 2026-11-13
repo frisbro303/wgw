@@ -9,6 +9,8 @@ Interactive 3D figures for web pages and PDFs: meshes, point clouds, curves and 
 core compiled to WebAssembly and driven by **widgets**: small WebAssembly modules, written in Rust, that respond to
 sliders and clicks. A figure is one `.wgw` file, a widget with its data inside, or a mesh.
 
+wgw is in beta: its API and file format still change, without deprecations.
+
 ```html
 <script type="module" src="wgw/wgw.js"></script>
 <div class="wgw" data-src="distance.wgw" data-up="y"></div>

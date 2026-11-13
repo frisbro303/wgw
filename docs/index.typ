@@ -1,9 +1,11 @@
-#import "@local/tdg:0.2.0": *
-#show: doc.with("index", title: "Overview", order: 1, description: "Interactive 3D figures for the web and for PDFs, driven by widgets compiled to WebAssembly.")
+#import "@local/tdg:0.1.0": *
+#show: docs.doc.with("index", title: "Overview", order: 1, description: "Interactive 3D figures for the web and for PDFs, driven by widgets compiled to WebAssembly.")
 
 wgw draws interactive 3D figures: meshes, point clouds, curves and vector fields, with a Rust core compiled to
 WebAssembly. A figure can be driven by a *widget*: a small WebAssembly module, written in Rust, that responds to
 sliders and clicks. A figure is one file, `.wgw`: a widget with any data it needs inside, or just a mesh.
+
+#callout(title: [Beta])[wgw is in beta: its API and file format still change, without deprecations.]
 
 #widget(path("../examples/torus.wgw"), view: (-60, 35),
         alt: "A torus colored by its Gaussian curvature, reshaped by two sliders")

@@ -407,4 +407,4 @@ function autoload() {
 
 if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", autoload); else autoload();
 
-window.WGW = { mount, Viewer, loadWidget, version: "0.3.0" };
+window.WGW = { mount, Viewer, loadWidget, version: "0.1.0" };

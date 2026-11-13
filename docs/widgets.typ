@@ -1,5 +1,5 @@
-#import "@local/tdg:0.2.0": *
-#show: doc.with("widgets", title: "Writing widgets", order: 3, description: "Widgets in Rust with wgw-widget: controls, scenes, picks, frames, panes and embedded data.")
+#import "@local/tdg:0.1.0": *
+#show: docs.doc.with("widgets", title: "Writing widgets", order: 3, description: "Widgets in Rust with wgw-widget: controls, scenes, picks, frames, panes and embedded data.")
 
 A widget is a small WebAssembly module that builds a figure's scene. It's written in Rust with the `wgw-widget`
 crate (any language that compiles to WebAssembly can follow the #link("/reference/#the-contract")[contract]),

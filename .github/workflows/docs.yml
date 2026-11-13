@@ -36,7 +36,7 @@ jobs:
         run: |
           git clone --depth 1 https://github.com/frisbro303/tdg /tmp/tdg
           mkdir -p ~/.local/share/typst/packages/local/tdg
-          cp -R /tmp/tdg/typst ~/.local/share/typst/packages/local/tdg/0.2.0
+          cp -R /tmp/tdg/typst ~/.local/share/typst/packages/local/tdg/0.1.0
       - run: typst compile --root . --features html,bundle --format bundle docs/site.typ docs/_site
       - uses: actions/upload-pages-artifact@v5
         with:

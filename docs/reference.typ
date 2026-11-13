@@ -1,5 +1,5 @@
-#import "@local/tdg:0.2.0": *
-#show: doc.with("reference", title: "Reference", order: 4, description: "Layers and their parameters, a widget's contract for any language, and wgw's file format.")
+#import "@local/tdg:0.1.0": *
+#show: docs.doc.with("reference", title: "Reference", order: 4, description: "Layers and their parameters, a widget's contract for any language, and wgw's file format.")
 
 = Layers
 

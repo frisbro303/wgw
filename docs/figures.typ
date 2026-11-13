@@ -1,5 +1,5 @@
-#import "@local/tdg:0.2.0": *
-#show: doc.with("figures", title: "Figures", order: 2, description: "Putting a wgw figure on a page: its attributes, styling and mesh files.")
+#import "@local/tdg:0.1.0": *
+#show: docs.doc.with("figures", title: "Figures", order: 2, description: "Putting a wgw figure on a page: its attributes, styling and mesh files.")
 
 Load `wgw.js` as a module (everything else in `dist/` must sit beside it), and any `<div class="wgw">` becomes a
 figure:

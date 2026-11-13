@@ -1,5 +1,5 @@
-#import "@local/tdg:0.2.0": *
-#show: doc.with("internals", title: "Internals", order: 6, description: "How wgw works, how to extend it, and how its docs are built.")
+#import "@local/tdg:0.1.0": *
+#show: docs.doc.with("internals", title: "Internals", order: 6, description: "How wgw works, how to extend it, and how its docs are built.")
 
 = How a figure works
 

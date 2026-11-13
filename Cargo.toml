@@ -1,6 +1,6 @@
 [package]
 name = "wgw"
-version = "0.2.0"
+version = "0.1.0"
 edition = "2021"
 description = "Interactive meshes, points, curves and vector fields in WebGL2, driven by widgets in Python, JS or anything that returns arrays."
 

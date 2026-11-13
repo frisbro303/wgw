@@ -1,5 +1,5 @@
-#import "@local/tdg:0.2.0": *
-#show: doc.with("javascript", title: "The page API", order: 5, description: "wgw figures from JavaScript: mounting them, picks, patches and widgets.")
+#import "@local/tdg:0.1.0": *
+#show: docs.doc.with("javascript", title: "The page API", order: 5, description: "wgw figures from JavaScript: mounting them, picks, patches and widgets.")
 
 `wgw.js` makes every `<div class="wgw">` a figure on its own, and sets `window.WGW` for pages that want more:
 
