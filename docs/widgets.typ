@@ -83,7 +83,8 @@ layer `mesh` picked, so the figure opens showing something; `Setup::keep_picks()
 
 `Setup::frames(n)` makes an animation: `scene` is asked for each frame, `state.frame` from 0 to n - 1, and the
 page plays them in a loop (`.fps(20.0)`, or `.once()`). A still draws frame 0 alone, so widgets never build frames
-they don't need.
+they don't need. A layer that a later frame leaves out stays as it is in frame 0: give what never changes (a
+sphere, a grid) with frame 0 only, and it's sent once. Scenes are built in a worker, off the page's thread.
 
 = Panes
 

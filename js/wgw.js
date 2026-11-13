@@ -18,7 +18,7 @@
 import init, { Viewer as Core } from "./core/wgw_core.js";
 import { fetchBytes, parseMesh } from "./io.js";
 import { animates, controlInputs } from "./patch.js";
-import { isWidget, loadWidget, stackFrames } from "./widget.js";
+import { isWidget, loadWidget } from "./widget.js";
 import { readStyle, rgbaList } from "./style.js";
 
 let wasm = null;
@@ -319,7 +319,7 @@ export class Viewer {
 
   async startWidget(bytes) {
     this.widget = await loadWidget(bytes);
-    const info = this.widget.setup();
+    const info = this.widget.setup;
     this.frames = Math.max(1, info.frames || 1);
     this.fps = info.fps;
     this.loop = info.loop;
@@ -376,10 +376,8 @@ export class Viewer {
     this.wanted = null;
     this.busy = true;
     try {
-      await null;  // let input events in between scenes
-      const state = (frame) => ({ controls: { ...this.controls }, picks: this.picks, frame });
-      const frames = Array.from({ length: this.frames }, (_, k) => this.widget.scene(null, state(k)));
-      this.apply(stackFrames(frames), animate);
+      const patch = await this.widget.scene({ controls: { ...this.controls }, picks: this.picks }, this.frames);
+      this.apply(patch, animate);
     } catch (err) {
       this.fail(err);
     }

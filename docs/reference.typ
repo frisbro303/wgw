@@ -42,7 +42,8 @@ message as the result). So a page and Typst run the same file. `wgw-widget` impl
   or `false` for a checkbox. `grid` is a boolean, or `{"toggle": on}` for a checkbox readers can use. `picked` is a
   vertex of the layer `mesh` picked from the start.
 - `scene(mesh, state)` returns a patch (below) for a state, JSON:
-  `{controls: {name: value}, picks: [{vertex, layer, point, frame}], frame}`.
+  `{controls: {name: value}, picks: [{vertex, layer, point, frame}], frame}`. For an animation it's asked for each
+  frame; a layer a later frame leaves out stays as it is in frame 0.
 
 `mesh` is the figure's mesh file when it has one apart from the widget; it's empty otherwise, and after the first
 call (the widget keeps it).

@@ -5,12 +5,35 @@
 //   scene(mesh, state)  -> a patch (see wgw-scene's patch.rs): the layers for a state, {controls, picks, frame}
 //
 // `mesh` is the figure's mesh file, if it has one apart from the widget (empty after the first call: the widget
-// keeps it). An animation is frames: scene is asked for each, and they're stacked into arrays with a frames axis.
+// keeps it). An animation is frames: scene is asked for each, and they're stacked into arrays with a frames axis. A
+// layer a later frame leaves out stays as it is in frame 0, so what never changes is sent once.
+//
+// The widget runs in a worker (widget-worker.js), so building scenes never holds up the page.
 
 const text = new TextDecoder(), utf8 = new TextEncoder();
 
-// A widget module from its bytes, with its two functions as async-free calls on byte arrays.
-export async function loadWidget(bytes) {
+// A widget run in a worker: `setup` (given at load) and `scene(state, frames)`, which resolves to the patch of
+// every frame, stacked.
+export async function loadWidget(bytes, mesh) {
+  const worker = new Worker(new URL("widget-worker.js", import.meta.url), { type: "module" });
+  const waiting = new Map();
+  let next = 0;
+  worker.onmessage = ({ data }) => {
+    const [resolve, reject] = waiting.get(data.id);
+    waiting.delete(data.id);
+    if (data.error !== undefined) reject(new Error(data.error)); else resolve(data.result);
+  };
+  const ask = (message, transfer = []) => new Promise((resolve, reject) => {
+    const id = next++;
+    waiting.set(id, [resolve, reject]);
+    worker.postMessage({ ...message, id }, transfer);
+  });
+  const setup = await ask({ type: "load", bytes, mesh: mesh || null });
+  return { setup, scene: (state, frames) => ask({ type: "scene", state, frames, mesh: null }) };
+}
+
+// A widget module from its bytes, with its two functions as calls on byte arrays (in the worker).
+export async function instantiate(bytes) {
   let args = new Uint8Array(0), result = null;
   let memory;
   const env = {
@@ -36,7 +59,7 @@ export async function loadWidget(bytes) {
   };
   return {
     setup: (mesh) => JSON.parse(text.decode(call("setup", mesh || new Uint8Array()))),
-    scene: (mesh, state) => decodePatch(call("scene", mesh || new Uint8Array(), utf8.encode(JSON.stringify(state)))),
+    scene: (mesh, state) => call("scene", mesh || new Uint8Array(), utf8.encode(JSON.stringify(state))),
   };
 }
 
@@ -64,12 +87,13 @@ export function decodePatch(bytes) {
 }
 
 // Frames' patches as one: each array gets a leading frames axis (faces and segments, the same in every frame,
-// are taken from the first), parameters from the first.
+// are taken from the first), parameters from the first. A layer only frame 0 has is the same in every frame.
 export function stackFrames(patches) {
   if (patches.length === 1) return patches[0];
   const first = patches[0], out = { layers: {} };
   for (const [name, l] of Object.entries(first.layers)) {
     if (l === null) { out.layers[name] = null; continue; }
+    if (!(name in patches[1].layers)) { out.layers[name] = l; continue; }  // unchanging: sent once
     const arrays = {};
     for (const [key, a] of Object.entries(l.arrays)) {
       if (key === "faces" || key === "segments") { arrays[key] = a; continue; }

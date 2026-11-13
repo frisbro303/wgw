@@ -31,7 +31,8 @@
 //! ```
 //!
 //! An animation is frames: `Setup::frames(n)` asks for `scene` with `state.frame` from 0 to n - 1, which the page
-//! plays in a loop; a still draws frame 0 alone. The functions follow Typst's plugin protocol (two imports from
+//! plays in a loop; a still draws frame 0 alone. A layer that a later frame leaves out stays as it is in frame 0,
+//! so a widget gives what never changes (a sphere, a grid) with frame 0 only, and it's sent once. The functions follow Typst's plugin protocol (two imports from
 //! `typst_env`), so the same `.wasm` loads in Typst as a plugin and on a page in wgw's runner.
 
 use std::collections::HashMap;
@@ -181,7 +182,8 @@ impl Setup {
         self.controls.insert(name.into(), json!(checked));
         self
     }
-    /// An animation of `n` frames (looping, at 30 per second unless set).
+    /// An animation of `n` frames (looping, at 30 per second unless set). Layers a frame after the first leaves out
+    /// stay as they are in frame 0.
     pub fn frames(mut self, n: u32) -> Self {
         self.frames = Some(n);
         self.looped = true;
