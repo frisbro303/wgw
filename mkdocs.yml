@@ -1,0 +1,72 @@
+site_name: wgw
+site_description: Interactive 3D figures for the web, driven by Python and JavaScript widgets
+repo_url: https://github.com/frisbro303/wgw
+repo_name: frisbro303/wgw
+edit_uri: edit/main/docs/
+exclude_docs: requirements.txt
+use_directory_urls: false  # every page at the site's root, so figures' relative paths (examples/...) work on all of them
+
+nav:
+  - Home: index.md
+  - Figures: figures.md
+  - Writing widgets: widgets.md
+  - Python reference: reference.md
+  - JavaScript: javascript.md
+  - Internals: internals.md
+
+theme:
+  name: material
+  features:
+    - content.code.copy
+    - navigation.sections
+    - toc.follow
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: white
+      toggle: { icon: material/weather-night, name: Dark mode }
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: black
+      toggle: { icon: material/weather-sunny, name: Light mode }
+
+extra_css:
+  - stylesheets/wgw.css
+extra_javascript:
+  - path: wgw/wgw.js  # copied in by hooks/wgw_assets.py, from dist/
+    type: module
+
+hooks:
+  - hooks/wgw_assets.py
+watch:
+  - python
+  - examples
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - md_in_html
+  - tables
+  - toc: { permalink: true }
+  - pymdownx.highlight
+  - pymdownx.superfences
+  - pymdownx.snippets: { base_path: ["."], check_paths: true }  # code included from examples/, so it's what runs
+
+plugins:
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          paths: [python]
+          options:
+            docstring_style: google
+            docstring_options: { warn_missing_types: false }  # types are given in words
+            show_source: false
+            show_root_heading: true
+            show_root_full_path: false
+            heading_level: 3
+            members_order: source
+            separate_signature: true
+            show_signature_annotations: false
+            merge_init_into_class: true
+            filters: ["!^_"]

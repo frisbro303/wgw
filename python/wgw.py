@@ -1,21 +1,7 @@
-"""Python for wgw: widgets (Widget, Slider, Checkbox), layers (Mesh, Points, Lines, Vectors), the .wgw file
-format, and shapes.
+"""wgw for Python: widgets, layers, meshes, shapes and `.wgw` files.
 
-A widget is a function from the figure's mesh (or nothing) to a Widget:
-
-    def widget(spot: Mesh) -> Widget:
-        embedding = ...                                  # work done once, kept by the closures below
-        def on_pick(vertex, epsilon):                    # controls arrive as keyword arguments
-            return {"mesh": spot.with_values(...), "dot": Points(spot.vertices[vertex])}
-        return Widget(controls={"epsilon": Slider(0.001, 1, 0.02, log=True)}, on_pick=on_pick, grid=True)
-
-
-Runs both offline (to write .wgw files for a page) and in the browser, where wgw puts this file on the
-widget's import path, so a widget can `from wgw import Mesh, Points`. Needs only NumPy.
-
-The .wgw format is little-endian: b"WGW1", a uint32 header length, a JSON header
-{"arrays": {name: {"dtype", "shape", "offset"}}}, then each array's raw bytes at its offset from the
-end of the header, which is padded so every array starts on an 8-byte boundary.
+Widgets import it in the browser, where wgw puts it on their path; offline scripts can import it as
+`python/wgw.py`. It needs only NumPy.
 """
 import json
 import struct
@@ -29,10 +15,15 @@ DTYPES = {"float32": "f4", "float16": "f2", "float64": "f8", "uint32": "u4", "in
 
 
 def save(path, vertices, faces, **arrays):
-    """Write a mesh, and any extra arrays its widget needs (say a spectrum), to an .wgw file.
+    """Write a mesh, and any arrays its widget needs, to a `.wgw` file.
 
-    vertices (n, 3) are stored as float32 and faces (m, 3) as uint32; extra arrays keep their dtype
-    (cast to float32 or float16 first to keep the file small), as long as it's one of DTYPES.
+    Args:
+        path: Where to write it.
+        vertices: `(n, 3)` positions, stored as float32.
+        faces: `(m, 3)` vertex indices, stored as uint32.
+        **arrays: Extra arrays by name (a spectrum, say), which a widget gets as the mesh's attributes. They keep
+            their dtype, which must be float16, float32, float64, int32, uint8, uint16 or uint32; cast to
+            float16 to halve a download.
     """
     arrays = {"vertices": np.asarray(vertices, np.float32), "faces": np.asarray(faces, np.uint32), **arrays}
     header, offset, blobs = {}, 0, []
@@ -51,7 +42,11 @@ def save(path, vertices, faces, **arrays):
 
 
 def load(path):
-    """Read an .wgw file back as a dict of arrays."""
+    """Read a `.wgw` file.
+
+    Returns:
+        Its arrays by name, `vertices` and `faces` included.
+    """
     data = open(path, "rb").read()
     if data[:4] != MAGIC:
         raise ValueError(f"{path} is not an .wgw file")
@@ -62,7 +57,17 @@ def load(path):
 
 
 def grid_faces(nu, nv, wrap_u=False, wrap_v=False):
-    """Triangles over an nu by nv grid of vertices numbered u * nv + v, optionally closed up in u or v."""
+    """Triangles over a grid of vertices numbered `u * nv + v`.
+
+    Args:
+        nu: The grid's size along u.
+        nv: The grid's size along v.
+        wrap_u: Join the last row to the first, as on a cylinder or torus.
+        wrap_v: Join the last column to the first.
+
+    Returns:
+        `(m, 3)` faces, two per grid cell.
+    """
     cu, cv = nu if wrap_u else nu - 1, nv if wrap_v else nv - 1
     u, v = np.meshgrid(np.arange(cu), np.arange(cv), indexing="ij")
     a, b = u * nv + v, ((u + 1) % nu) * nv + v
@@ -71,9 +76,18 @@ def grid_faces(nu, nv, wrap_u=False, wrap_v=False):
 
 
 def surface(f, u=(0, 1), v=(0, 1), n=64, wrap_u=False, wrap_v=False):
-    """A parametric surface f(u, v) -> (x, y, z), sampled on an n by n grid; returns (vertices, faces, u, v).
+    """A parametric surface, sampled on a grid.
 
-    Wrapped directions leave out the endpoint, which would repeat the start.
+    Args:
+        f: `f(u, v) -> (x, y, z)`, taking and returning arrays.
+        u: The range of the first parameter.
+        v: The range of the second.
+        n: Samples along each parameter.
+        wrap_u: Whether the surface closes up in u; the range's end is then left out, as it would repeat the start.
+        wrap_v: Whether it closes up in v.
+
+    Returns:
+        `(vertices, faces, u, v)`, with each vertex's parameters.
     """
     us = np.linspace(*u, n, endpoint=not wrap_u)
     vs = np.linspace(*v, n, endpoint=not wrap_v)
@@ -83,13 +97,26 @@ def surface(f, u=(0, 1), v=(0, 1), n=64, wrap_u=False, wrap_v=False):
 
 
 def torus(R=1.0, r=0.4, n=64):
-    """A torus about the z axis; returns (vertices, faces, u, v) with u around the axis and v around the tube."""
+    """A torus about the z axis.
+
+    Args:
+        R: The distance from the axis to the tube's center.
+        r: The tube's radius.
+        n: Samples around the axis and around the tube.
+
+    Returns:
+        `(vertices, faces, u, v)`, with `u` the angle around the axis and `v` around the tube.
+    """
     return surface(lambda u, v: ((R + r * np.cos(v)) * np.cos(u), (R + r * np.cos(v)) * np.sin(u), r * np.sin(v)),
                    (0, 2 * np.pi), (0, 2 * np.pi), n, wrap_u=True, wrap_v=True)
 
 
 def icosphere(subdivisions=3):
-    """The unit sphere, from an icosahedron with each triangle split in four `subdivisions` times."""
+    """The unit sphere, as an icosahedron with each triangle split in four, `subdivisions` times.
+
+    Returns:
+        `(vertices, faces)`: 642 vertices at 3 subdivisions, 2562 at 4.
+    """
     t = (1 + 5 ** 0.5) / 2
     vertices = [(-1, t, 0), (1, t, 0), (-1, -t, 0), (1, -t, 0), (0, -1, t), (0, 1, t),
                 (0, -1, -t), (0, 1, -t), (t, 0, -1), (t, 0, 1), (-t, 0, -1), (-t, 0, 1)]
@@ -109,7 +136,13 @@ def icosphere(subdivisions=3):
 
 
 def rescale(values, lo=None, hi=None):
-    """Values mapped linearly onto [0, 1], the range the colormap spans, from [lo, hi] (their min and max by default)."""
+    """Values mapped linearly onto [0, 1], the range colors span by default.
+
+    Args:
+        values: Any array.
+        lo: The value that maps to 0 (by default, the smallest); values below are clipped.
+        hi: The value that maps to 1 (by default, the largest); values above are clipped.
+    """
     values = np.asarray(values, float)
     lo = values.min() if lo is None else lo
     hi = values.max() if hi is None else hi
@@ -124,7 +157,20 @@ def rescale(values, lo=None, hi=None):
 
 
 class Layer:
-    """A layer of the scene: named arrays (per vertex, or per frame and vertex to animate) and parameters."""
+    """What every layer has: arrays (per vertex, or per frame and vertex to animate) and parameters.
+
+    Every layer takes these parameters as keyword arguments:
+
+    | parameter | default | |
+    |---|---|---|
+    | `color` | | one CSS color for the whole layer |
+    | `colors` | the figure's | a list of CSS colors for `values` to run through |
+    | `min`, `max` | `0`, `1` | the range of `values` the colors span |
+    | `visible` | `True` | |
+    | `pickable` | meshes and points | whether clicks pick it |
+
+    Without `values` or `color`, meshes take the first of the figure's colors, and other layers its accent.
+    """
 
     kind = None
     fields = ()  # the array fields, in constructor order
@@ -133,7 +179,10 @@ class Layer:
         self.params = params  # numbers, booleans and CSS colors; see the README for each kind's
 
     def replace(self, **changes):
-        """A copy with some arrays or parameters changed; the rest are shared, not copied."""
+        """A copy with some arrays or parameters changed.
+
+        The rest are shared, not copied, and shared arrays aren't sent to the page again.
+        """
         new = object.__new__(type(self))
         new.__dict__.update(self.__dict__)
         new.params = dict(self.params)
@@ -145,7 +194,7 @@ class Layer:
         return new
 
     def with_values(self, values, **params):
-        """A copy colored by new per-vertex values, sharing everything else."""
+        """A copy colored by new values, `(n)` or `(frames, n)`, sharing everything else."""
         return self.replace(values=values, **params)
 
     def _wgw_layer(self):
@@ -163,10 +212,18 @@ class Layer:
 
 
 class Mesh(Layer):
-    """A triangle mesh: vertices (n, 3), faces (m, 3), and values (n) for color, in [min, max] (default [0, 1]).
+    """A triangle mesh.
 
-    Extra arrays (from a .wgw file, or given as `data`) are attributes: mesh.evecs, or mesh["evecs"]. Parameters:
-    edges, flat, color, colors, min, max, edge_color, pickable, visible.
+    A figure's mesh file reaches its widget as a `Mesh`, with the file's extra arrays as attributes: `spot.evecs`,
+    or `spot["evecs"]`.
+
+    Args:
+        vertices: `(n, 3)` positions, or `(frames, n, 3)` to animate.
+        faces: `(m, 3)` vertex indices.
+        values: `(n)` or `(frames, n)`, for color.
+        data: Extra arrays by name.
+        **params: `flat` (flat shading), `edges` (this mesh's triangle grid, overriding the widget's `grid`),
+            `edge_color`, and those of every [layer][wgw.Layer].
     """
 
     kind = "mesh"
@@ -190,7 +247,12 @@ class Mesh(Layer):
 
     @classmethod
     def load(cls, path):
-        """A mesh from a .wgw file (with its extra arrays) or a Wavefront .obj (polygons split into triangles)."""
+        """A mesh from a file.
+
+        Args:
+            path: A `.wgw` file (whose extra arrays become the mesh's), or a Wavefront `.obj` (polygons are split
+                into triangles; texture coordinates and normals are ignored). In a widget, relative to the widget.
+        """
         path = str(path)
         if path.endswith(".obj"):
             vertices, faces = [], []
@@ -207,7 +269,7 @@ class Mesh(Layer):
         return cls(arrays.pop("vertices"), arrays.pop("faces"), data=arrays)
 
     def save(self, path, **arrays):
-        """Write the mesh, its extra arrays and these ones to a .wgw file."""
+        """Write the mesh, its extra arrays and these ones to a `.wgw` file."""
         save(path, self.vertices, self.faces, **{**self.data, **arrays})
 
     @property
@@ -253,7 +315,14 @@ class Mesh(Layer):
 
 
 class Points(Layer):
-    """A point cloud, vertices (n, 3), drawn as round dots `size` CSS pixels across; values (n) for color."""
+    """Points, drawn as round dots.
+
+    Args:
+        vertices: `(n, 3)`, `(3)` for one point, or `(frames, n, 3)`.
+        values: `(n)` or `(frames, n)`, for color.
+        **params: `size` (CSS pixels across, 6), `lift` (how far toward the camera, as a fraction of the scene,
+            so points on a surface sit on top of it; 0.02), and those of every [layer][wgw.Layer].
+    """
 
     kind = "points"
     fields = ("vertices", "values")
@@ -265,8 +334,15 @@ class Points(Layer):
 
 
 class Lines(Layer):
-    """A curve through vertices (n, 3) in order (closed=True joins the ends), or the segments (s, 2) between them;
-    `width` CSS pixels wide; values (n) for color."""
+    """A curve, or any set of segments.
+
+    Args:
+        vertices: `(n, 3)` or `(frames, n, 3)`.
+        values: `(n)` or `(frames, n)`, for color.
+        segments: `(s, 2)` pairs of vertices to join; by default, each vertex to the next.
+        **params: `width` (CSS pixels, 2), `closed` (join the last vertex to the first), and those of every
+            [layer][wgw.Layer].
+    """
 
     kind = "lines"
     fields = ("vertices", "segments", "values")
@@ -279,7 +355,15 @@ class Lines(Layer):
 
 
 class Vectors(Layer):
-    """Arrows from origins (n, 3) along vectors (n, 3), scaled by `scale`; values (n) for color."""
+    """Arrows: a vector field.
+
+    Args:
+        origins: `(n, 3)` or `(frames, n, 3)`, where the arrows start.
+        vectors: `(n, 3)` or `(frames, n, 3)`.
+        values: `(n)` or `(frames, n)`, for color.
+        **params: `scale` (multiplies the vectors, 1), `width` (the shaft's radius, as a fraction of the scene,
+            0.006; the head is in proportion), and those of every [layer][wgw.Layer].
+    """
 
     kind = "vectors"
     fields = ("origins", "vectors", "values")
@@ -296,7 +380,16 @@ class Vectors(Layer):
 
 @dataclass(frozen=True)
 class Slider:
-    """A slider from min to max starting at value; log=True moves it evenly in powers of ten."""
+    """A slider.
+
+    Attributes:
+        min: Its lowest value; with `log`, it must be positive.
+        max: Its highest value.
+        value: Where it starts.
+        step: Its step; by default, a 200th of the range.
+        log: Move evenly in powers of ten (in steps of 0.01 of a decade), for a parameter spanning orders of
+            magnitude.
+    """
 
     min: float
     max: float
@@ -310,6 +403,8 @@ class Slider:
 
 @dataclass(frozen=True)
 class Checkbox:
+    """A checkbox, starting checked or not."""
+
     value: bool = False
 
     def _spec(self):
@@ -321,19 +416,25 @@ Scene = dict  # layers by name: {"mesh": Mesh(...), "dot": Points(...), "gone": 
 
 @dataclass(frozen=True)
 class Widget:
-    """What a widget is: its starting scene, its controls, and functions from controls (and a picked vertex) to
-    changes of the scene.
+    """A widget: what a figure starts as, its controls, and how it responds to them.
 
-    scene      layers to start with, by name; the figure's mesh file, if any, is already shown as "mesh"
-    controls   Sliders and Checkboxes by name; their values are passed to on_change and on_pick as keyword arguments
-    on_change  (**controls) -> Scene, run at the start and whenever a control changes
-    on_pick    (vertex, **controls) -> Scene, run when a vertex is clicked (or hovered, with pick: "hover"); add a
-               `layer` argument to be told which layer it was in
-    grid       draw meshes' triangle grids: True, False, or a Checkbox for readers to toggle it
-    fps, loop  how a scene's frames play (arrays with a leading frames axis animate)
+    A widget file's `widget(mesh)` (or `widget()`, for a figure without a mesh) returns one.
 
-    A returned Scene replaces the layers it names, each exactly as given; layers it doesn't name are kept, and
-    None removes one. Returning a single layer means {"mesh": layer}.
+    `on_change` and `on_pick` return a **scene**: layers by name. Each replaces the layer of that name exactly as
+    given; `None` removes one; layers not named are kept. A single layer means `{"mesh": layer}`, and `None`
+    changes nothing.
+
+    Attributes:
+        scene: Layers to start with, by name. The figure's mesh file, if any, is already shown as `"mesh"`.
+        controls: [Sliders][wgw.Slider] and [checkboxes][wgw.Checkbox] by name. Their values are passed to
+            `on_change` and `on_pick` as keyword arguments.
+        on_change: `(**controls) -> scene`, run at the start and whenever a control changes.
+        on_pick: `(vertex, **controls) -> scene`, run when a vertex is clicked (or hovered, with
+            `data-pick="hover"`), and again with the same vertex whenever a control changes. Give it a `layer`
+            parameter to be told which layer the vertex is in.
+        grid: Draw meshes' triangle grids: `True`, `False`, or a `Checkbox` for readers to toggle them.
+        fps: The rate animation frames play at (arrays with a leading frames axis animate).
+        loop: Loop animations, rather than playing them once.
     """
 
     scene: Scene = field(default_factory=dict)

@@ -345,9 +345,11 @@ function autoload() {
     const runner = el.dataset.widget && runners[el.dataset.widget.split(/[?#]/)[0].split(".").pop()];
     if (runner && runner.preload) (window.requestIdleCallback || setTimeout)(runner.preload);
   }
-  // Follow theme switches, by an attribute on <html> or the system setting.
+  // Follow theme switches: an attribute on <html> or <body> (data-md-color-scheme is MkDocs Material's), or the
+  // system setting.
   const restyle = () => viewers.forEach((v) => v.restyle());
-  new MutationObserver(restyle).observe(document.documentElement, { attributes: true, attributeFilter: ["class", "data-theme", "style"] });
+  const watched = { attributes: true, attributeFilter: ["class", "data-theme", "style", "data-md-color-scheme"] };
+  for (const el of [document.documentElement, document.body]) new MutationObserver(restyle).observe(el, watched);
   matchMedia("(prefers-color-scheme: dark)").addEventListener("change", restyle);
 }
 
