@@ -38,7 +38,7 @@ const STYLE = `
 .wgw canvas,.wgw-controls{transition:opacity .3s}
 .wgw.wgw-loading canvas,.wgw.wgw-loading .wgw-controls{opacity:0;pointer-events:none}
 .wgw-credit{position:absolute;top:8px;right:10px;display:inline-flex;align-items:center;gap:4px;font:11px ui-monospace,monospace;color:inherit;opacity:.45;text-decoration:none}
-.wgw-credit img{width:12px;height:12px}
+.wgw .wgw-credit img{width:12px;height:12px;background:none;padding:0;border:0;box-shadow:none}
 .wgw-credit:hover{opacity:.85;text-decoration:underline}
 .wgw-controls label{display:inline-flex;align-items:center;gap:8px;cursor:pointer;user-select:none}
 .wgw-controls output{font-variant-numeric:tabular-nums;text-align:right}
