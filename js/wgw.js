@@ -31,13 +31,17 @@ const STYLE = `
 .wgw{position:relative}
 .wgw canvas{display:block;width:100%;height:var(--wgw-height,420px);touch-action:none;cursor:grab;outline:none}
 .wgw canvas.dragging{cursor:grabbing}
-.wgw-status{position:absolute;left:8px;top:8px;font:12px ui-monospace,monospace;opacity:.6;pointer-events:none;white-space:pre-line}
+.wgw-status{position:absolute;left:0;right:0;top:0;height:var(--wgw-height,420px);display:flex;align-items:center;justify-content:center;padding:0 24px;text-align:center;font:12px ui-monospace,monospace;opacity:.6;pointer-events:none;white-space:pre-line}
+.wgw-status:empty{display:none}
 .wgw-controls{display:flex;flex-wrap:wrap;justify-content:center;gap:6px 18px;font:13px ui-monospace,monospace}
 .wgw-controls:empty{display:none}
-.wgw-credit{position:absolute;top:8px;right:10px;font:11px ui-monospace,monospace;color:inherit;opacity:.4;text-decoration:none}
+.wgw canvas,.wgw-controls{transition:opacity .3s}
+.wgw.wgw-loading canvas,.wgw.wgw-loading .wgw-controls{opacity:0;pointer-events:none}
+.wgw-credit{position:absolute;top:8px;right:10px;display:inline-flex;align-items:center;gap:4px;font:11px ui-monospace,monospace;color:inherit;opacity:.45;text-decoration:none}
+.wgw-credit img{width:12px;height:12px}
 .wgw-credit:hover{opacity:.85;text-decoration:underline}
 .wgw-controls label{display:inline-flex;align-items:center;gap:8px;cursor:pointer;user-select:none}
-.wgw-controls output{min-width:5ch;font-variant-numeric:tabular-nums}
+.wgw-controls output{font-variant-numeric:tabular-nums;text-align:right}
 .wgw-controls input{--c:var(--wgw-control,currentColor);--faint:color-mix(in srgb,var(--c) 22%,transparent);margin:0;cursor:pointer}
 .wgw-controls input:focus-visible{outline:none}
 .wgw-controls input[type=range]{-webkit-appearance:none;appearance:none;width:140px;height:18px;background:none}
@@ -60,6 +64,13 @@ let widgetCount = 0;
 
 const flag = (v) => v !== undefined && v !== "false";
 const format = (x) => String(+(+x).toPrecision(3));
+// A slider's value with a fixed number of decimals, so it keeps its length: on a log slider, as many as its minimum
+// needs (0.001 ... 0.020 ... 1.000); on a linear one, as many as its step.
+const formatter = (c) => {
+  const smallest = c.log ? 10 ** c.min : c.step || 1;
+  const decimals = Math.min(6, Math.max(0, -Math.floor(Math.log10(smallest) + 1e-9)));
+  return (x) => (+x).toFixed(decimals);
+};
 // "turn,tilt" in degrees; a typographic minus (as Typst writes) reads as one, and anything unreadable as the default.
 const parseView = (text) => {
   const view = (text || "").split(",").map((x) => Number(x.trim().replace("\u2212", "-")));
@@ -83,18 +94,20 @@ export class Viewer {
       credit: options.credit ?? d.credit !== "false",
     };
     el.wgw = this;
-    el.classList.add("wgw");
+    el.classList.add("wgw", "wgw-loading");  // nothing shows until the mesh, the widget and its first results are in
 
     this.canvas = document.createElement("canvas");
     this.canvas.setAttribute("role", "img");
     this.canvas.setAttribute("aria-label", d.label || "Interactive 3D figure: drag to turn, pinch or ctrl+scroll to zoom");
-    this.statusEl = Object.assign(document.createElement("div"), { className: "wgw-status" });
+    this.statusEl = Object.assign(document.createElement("div"), { className: "wgw-status", textContent: "loading…" });
     this.controlsEl = Object.assign(document.createElement("div"), { className: "wgw-controls" });
     el.append(this.canvas, this.statusEl, this.controlsEl);
     if (this.options.credit) {  // a small link to wgw; data-credit="false" (or CSS) hides it
       const credit = Object.assign(document.createElement("a"), {
-        className: "wgw-credit", href: "https://github.com/frisbro303/wgw", textContent: "wgw", target: "_blank", rel: "noopener",
+        className: "wgw-credit", href: "https://github.com/frisbro303/wgw", target: "_blank", rel: "noopener",
       });
+      const logo = Object.assign(document.createElement("img"), { src: new URL("logo.svg", import.meta.url).href, alt: "", width: 12, height: 12 });
+      credit.append(logo, "wgw");
       el.append(credit);
     }
 
@@ -132,7 +145,6 @@ export class Viewer {
     const o = this.options;
     try {
       if (o.src) {  // parsed and shown by the core right away, then handed to the widget
-        this.status("loading mesh…");
         const file = await loadMesh(o.src);
         try {
           this.core.set_mesh_file("mesh", file);
@@ -141,10 +153,10 @@ export class Viewer {
         } finally {
           file.free();
         }
-        this.status("");
         this.requestRender();
       }
       if (o.widget) await this.startWidget();
+      else this.reveal();
     } catch (err) {
       this.fail(err);
     }
@@ -157,7 +169,18 @@ export class Viewer {
 
   status(text) { this.statusEl.textContent = text || ""; }
 
+  // Show the figure: once everything has loaded, or on an error, so it's seen.
+  reveal() {
+    if (!this.el.classList.contains("wgw-loading")) return;
+    this.requestRender();
+    requestAnimationFrame(() => requestAnimationFrame(() => {  // after the first frame is drawn
+      this.el.classList.remove("wgw-loading");
+      if (!this.statusEl.textContent.startsWith("error")) this.status("");
+    }));
+  }
+
   fail(err) {
+    this.reveal();
     console.error(err);
     const lines = String((err && err.message) || err).trim().split("\n");
     this.status("error: " + lines[lines.length - 1]);
@@ -277,26 +300,29 @@ export class Viewer {
   async startWidget() {
     const url = this.options.widget;
     this.runner = runnerFor(url);
-    this.status("loading widget…");
+
     this.key = `${url.split("/").pop()}#${++widgetCount}`;
     const info = await this.runner.load(this.key, url, this.arrays || null);
-    this.status("");
     this.functions = info.functions;
     this.fps = info.fps;
     this.loop = info.loop;
     this.core.set_grid(!!info.grid);
+    if (info.picked != null && this.lastPick === null) this.lastPick = { layer: "mesh", index: info.picked };  // the widget's starting pick
     this.buildControls(controlInputs(info.controls));
     this.apply(info.result, true);
     this.widgetReady = true;
     if (this.functions.includes("change")) this.call("change", false);
     this.requestRender();
-    if (this.lastPick && this.functions.includes("pick")) this.call("pick", true);
+    if (this.lastPick && this.functions.includes("pick")) this.call("pick", false);
+    this.revealWhenIdle = true;  // after the first results are drawn
+    if (!this.busy && !this.pending.size) this.reveal();
   }
 
   buildControls(spec) {
     for (const [name, c] of Object.entries(spec)) {
       const label = document.createElement("label"), input = document.createElement("input"), output = document.createElement("output");
       const actual = (x) => (c.log ? 10 ** x : x);  // what the widget gets
+      const show = formatter(c);
       // "grid" is the viewer's: a checkbox for the triangle grid, not passed to the widget.
       const viewer = name === "grid" && c.type === "checkbox";
       if (viewer) this.core.set_grid(c.value);
@@ -306,7 +332,8 @@ export class Viewer {
         label.append(input, name);
       } else {
         Object.assign(input, { type: "range", min: c.min, max: c.max, step: c.step, value: c.value });
-        output.textContent = format(actual(c.value));
+        output.textContent = show(actual(c.value));
+        output.style.minWidth = `${Math.max(show(actual(c.min)).length, show(actual(c.max)).length)}ch`;
         fill(input);
         label.append(name, input, output);
       }
@@ -314,7 +341,7 @@ export class Viewer {
         const value = input.type === "checkbox" ? input.checked : actual(+input.value);
         if (viewer) { this.core.set_grid(value); this.requestRender(); return; }
         this.controls[name] = value;
-        if (input.type !== "checkbox") { output.textContent = format(value); fill(input); }
+        if (input.type !== "checkbox") { output.textContent = show(value); fill(input); }
         if (this.functions.includes("change")) this.call("change", false);
         if (this.functions.includes("pick") && this.lastPick) this.call("pick", false);
       });
@@ -342,6 +369,7 @@ export class Viewer {
       this.fail(err);
     }
     this.busy = false;
+    if (this.revealWhenIdle && !this.pending.size) this.reveal();
     this.flush();
   }
 }

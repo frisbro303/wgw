@@ -437,6 +437,8 @@ class Widget:
             `data-pick="hover"`), and again with the same vertex whenever a control changes. Give it a `layer`
             parameter to be told which layer the vertex is in.
         grid: Draw meshes' triangle grids: `True`, `False`, or a `Checkbox` for readers to toggle them.
+        picked: A vertex of the figure's mesh to start with picked: `on_pick` runs for it at the start, so the
+            figure opens showing something, and controls act on it until a reader picks another.
         fps: The rate animation frames play at (arrays with a leading frames axis animate).
         loop: Loop animations, rather than playing them once.
     """
@@ -446,5 +448,6 @@ class Widget:
     on_change: Optional[Callable[..., Scene]] = None
     on_pick: Optional[Callable[..., Scene]] = None
     grid: Union[bool, Checkbox] = False
+    picked: Optional[int] = None
     fps: float = 30
     loop: bool = False

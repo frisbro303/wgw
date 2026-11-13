@@ -1,5 +1,5 @@
-#import "@local/tdg:0.1.0": *
-#set document(title: "Writing widgets", description: "A guide to wgw's Python widgets, by example.")
+#import "@local/tdg:0.2.0": *
+#show: doc.with("widgets", title: "Writing widgets", order: 3, description: "A guide to wgw's Python widgets, by example.")
 
 A widget is a Python file next to a figure, named in its `data-widget`. It defines one function, `widget`, from
 the figure's mesh to a #link("/reference/#wgw.Widget")[`Widget`]: a value saying what the figure starts as, which
@@ -9,8 +9,8 @@ controls it has, and how it responds to them.
 
 Move the mouse over Spot:
 
-#widget(widget: "/examples/hover_widget.py", src: "/examples/spot.obj", pick: "hover", up: "y", view: (-110, 15))
-#source-code("hover_widget.py", read("/examples/hover_widget.py"))
+#widget(widget: path("../examples/hover_widget.py"), src: path("../examples/spot.obj"), pick: "hover", up: "y", view: (-110, 15))
+#source-code(path("../examples/hover_widget.py"))
 
 ```html
 <div class="wgw" data-src="spot.obj" data-widget="hover_widget.py" data-pick="hover" data-up="y"></div>
@@ -27,8 +27,8 @@ Move the mouse over Spot:
 `on_change` runs at the start, and whenever a control changes; it suits figures that don't need a click. This one
 builds its shape in Python, and gives readers a checkbox for the triangle grid:
 
-#widget(widget: "/examples/torus_widget.py", view: (-60, 35))
-#source-code("torus_widget.py", read("/examples/torus_widget.py"))
+#widget(widget: path("../examples/torus_widget.py"), view: (-60, 35))
+#source-code(path("../examples/torus_widget.py"))
 
 Controls are #link("/reference/#wgw.Slider")[`Slider`]s, with `log=True` for one that moves in powers of ten,
 and #link("/reference/#wgw.Checkbox")[`Checkbox`]es. Every field of a `Widget` is optional, so a widget can have
@@ -40,8 +40,8 @@ A scene is a dict of layers by name. Each layer you return replaces the layer of
 `None` removes one; layers you don't name stay as they are. So here a click adds a dot without redrawing the rest,
 and unticking _arrows_ removes them:
 
-#widget(widget: "/examples/fields_widget.py", view: (-50, 25))
-#source-code("fields_widget.py", read("/examples/fields_widget.py"))
+#widget(widget: path("../examples/fields_widget.py"), view: (-50, 25))
+#source-code(path("../examples/fields_widget.py"))
 
 There are four kinds of layer, #link("/reference/#wgw.Mesh")[`Mesh`], #link("/reference/#wgw.Points")[`Points`],
 #link("/reference/#wgw.Lines")[`Lines`] and #link("/reference/#wgw.Vectors")[`Vectors`]. Any of them is colored
@@ -57,8 +57,8 @@ Give `values` or `vertices` a leading frames axis, `(frames, n)` or `(frames, n,
 widget's `fps`, once (or forever, with `loop=True`). When a slider moves, the last frame shows at once. Click the
 sphere:
 
-#widget(widget: "/examples/heat_widget.py")
-#source-code("heat_widget.py", read("/examples/heat_widget.py"))
+#widget(widget: path("../examples/heat_widget.py"))
+#source-code(path("../examples/heat_widget.py"))
 
 = Work done once, and data files
 

@@ -114,7 +114,7 @@ def _load(key, url, source, arrays):
     return {
         "controls": json.dumps(controls, default=_json),
         "functions": json.dumps([f for f in ("change", "pick") if getattr(w, "on_" + f)]),
-        "options": json.dumps({"grid": bool(grid), "fps": w.fps, "loop": bool(w.loop)}),
+        "options": json.dumps({"grid": bool(grid), "fps": w.fps, "loop": bool(w.loop), "picked": w.picked}),
         "result": _out(key, w.scene),
     }
 

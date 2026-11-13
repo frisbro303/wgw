@@ -1,3 +1,5 @@
+<img src="assets/logo.svg" width="56" alt="">
+
 # wgw: web geometry widgets
 
 Interactive 3D figures for web pages: meshes, point clouds, curves and vector fields, drawn by a Rust core
@@ -41,5 +43,5 @@ python3 -m http.server         # examples at http://localhost:8000/examples/
 [writing widgets](https://frisbro303.github.io/wgw/widgets/), the
 [Python reference](https://frisbro303.github.io/wgw/reference/),
 [JavaScript](https://frisbro303.github.io/wgw/javascript/) and
-[internals](https://frisbro303.github.io/wgw/internals/). They're Typst pages in [`docs/`](docs), built by
-[tdg](https://github.com/frisbro303/tdg): `./build.sh`, then `tdg serve docs`.
+[internals](https://frisbro303.github.io/wgw/internals/). They're Typst pages in [`docs/`](docs), a
+[tdg](https://github.com/frisbro303/tdg) site: `typst compile --root . --features html,bundle --format bundle docs/site.typ docs/_site`.

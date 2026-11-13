@@ -1,16 +1,16 @@
-#import "@local/tdg:0.1.0": *
-#set document(title: "Overview", description: "Interactive 3D figures for the web, driven by Python and JavaScript widgets.")
+#import "@local/tdg:0.2.0": *
+#show: doc.with("index", title: "Overview", order: 1, description: "Interactive 3D figures for the web, driven by Python and JavaScript widgets.")
 
 wgw draws interactive 3D figures on web pages: meshes, point clouds, curves and vector fields, with a Rust core
 compiled to WebAssembly. A figure can be driven by a *widget*, a short Python or JavaScript program that responds
 to sliders and clicks. Python runs in the browser with Pyodide, off the page's thread.
 
-#widget(widget: "/examples/fields_widget.py", view: (-50, 25),
+#widget(widget: path("../examples/fields_widget.py"), view: (-50, 25),
         alt: "A sphere colored by a function, with its gradient as arrows and a level curve")
 
 Drag to turn it, click to place a point. It's this widget:
 
-#source-code("fields_widget.py", read("/examples/fields_widget.py"))
+#source-code(path("../examples/fields_widget.py"))
 
 on a page with this HTML:
 
@@ -22,7 +22,7 @@ on a page with this HTML:
 or, in a #link("https://github.com/frisbro303/tdg")[tdg] site, this Typst:
 
 ```typ
-#widget(widget: "fields_widget.py")
+#widget(widget: path("fields_widget.py"))
 ```
 
 = Getting it

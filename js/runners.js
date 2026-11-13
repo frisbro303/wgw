@@ -84,6 +84,7 @@ const js = {
       grid: toggle ? !!w.grid.toggle : !!w.grid,
       fps: w.fps ?? 30,
       loop: !!w.loop,
+      picked: w.picked ?? null,
       result: toPatch(key, w.scene),
     };
   },

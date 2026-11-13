@@ -1,13 +1,13 @@
-#import "@local/tdg:0.1.0": *
-#set document(title: "JavaScript", description: "wgw widgets in JavaScript, the page API, patches, and other languages.")
+#import "@local/tdg:0.2.0": *
+#show: doc.with("javascript", title: "JavaScript", order: 5, description: "wgw widgets in JavaScript, the page API, patches, and other languages.")
 
 = Widgets in JavaScript
 
 A `.js` widget is an ES module exporting `widget(mesh)` (or a default export), returning what a Python `Widget`
 holds, as an object. It runs on the page, with no Pyodide to load. This one builds and animates a sheet:
 
-#widget(widget: "/examples/ripple_widget.js", view: (-60, 30), pick: "none")
-#source-code("ripple_widget.js", read("/examples/ripple_widget.js"))
+#widget(widget: path("../examples/ripple_widget.js"), view: (-60, 30), pick: "none")
+#source-code(path("../examples/ripple_widget.js"))
 
 #table(
   columns: 2,

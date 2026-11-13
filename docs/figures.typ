@@ -1,5 +1,5 @@
-#import "@local/tdg:0.1.0": *
-#set document(title: "Figures", description: "Putting a wgw figure on a page: its attributes, styling and mesh files.")
+#import "@local/tdg:0.2.0": *
+#show: doc.with("figures", title: "Figures", order: 2, description: "Putting a wgw figure on a page: its attributes, styling and mesh files.")
 
 Load `wgw.js` as a module (everything else in `dist/` must sit beside it), and any `<div class="wgw">` becomes a
 figure:
@@ -12,16 +12,16 @@ figure:
 A figure needs a browser with WebGL2. It loads when it nears the screen, and draws only while on it. It doesn't
 need a widget: this is just `data-src`, `data-up` and `data-view`.
 
-#widget(src: "/examples/spot.obj", up: "y", view: (-110, 15), alt: "Keenan Crane's Spot, a cow")
+#widget(src: path("../examples/spot.obj"), up: "y", view: (-110, 15), alt: "Keenan Crane's Spot, a cow")
 
 = In Typst
 
 In a #link("https://github.com/frisbro303/tdg")[tdg] site, `widget(...)` makes the same figure, numbered and
-captioned like any other, and shows a still image in PDFs:
+captioned like any other; tdg publishes its files (given as paths) with the site, and a PDF shows its still:
 
 ```typ
-#widget(widget: "distance_widget.py", src: "meshes/spot.obj", up: "y", view: (90, 10),
-        still: image("distance_widget.png"), caption: [Diffusion distance on Spot.])
+#widget(widget: path("distance_widget.py"), src: path("meshes/spot.obj"), data: (path("spectrum.npz"),),
+        up: "y", view: (90, 10), still: image("distance_widget.png"), caption: [Diffusion distance on Spot.])
 ```
 
 = Attributes

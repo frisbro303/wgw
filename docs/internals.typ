@@ -1,5 +1,5 @@
-#import "@local/tdg:0.1.0": *
-#set document(title: "Internals", description: "How wgw works, how to extend it, and how its docs are built.")
+#import "@local/tdg:0.2.0": *
+#show: doc.with("internals", title: "Internals", order: 6, description: "How wgw works, how to extend it, and how its docs are built.")
 
 = How a figure works
 
@@ -62,13 +62,15 @@ The examples page (`examples/index.html`) loads `dist/`. There are no browser te
 
 = The docs
 
-These pages are Typst, built into a site by #link("https://github.com/frisbro303/tdg")[tdg] (`docs/tdg.toml`).
-Each live figure's source is read from `examples/`, so what's shown is what runs, and the Python reference is laid
-out by `api(...)` from `wgw.py`'s docstrings, which tdg reads with griffe.
+These pages are Typst, and #link("https://github.com/frisbro303/tdg")[tdg] makes them a site in one
+`typst compile`: `docs/site.typ` sets it up and includes the pages. Each live figure's source is read from
+`examples/`, so what's shown is what runs, and the Python reference is laid out by `api(...)` from `wgw.py`'s
+docstrings, which tdg's plugin reads.
 
 ```sh
-./build.sh
-tdg serve docs   # http://localhost:8000, rebuilt as you edit
+typst compile --root . --features html,bundle --format bundle docs/site.typ docs/_site
+typst watch --root . --features html,bundle --format bundle docs/site.typ docs/_site   # rebuilt as you edit
+python3 -m http.server -d docs/_site                                                   # http://localhost:8000
 ```
 
 On every push to `main`, `.github/workflows/docs.yml` builds wgw and the site, and publishes it to GitHub Pages.
