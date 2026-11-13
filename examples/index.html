@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>wgw examples</title>
+<style>
+  :root { --wgw-colors: #dad8ce, #af3029; --wgw-edge: rgba(16, 15, 15, 0.25); color-scheme: light dark; }
+  @media (prefers-color-scheme: dark) { :root { --wgw-colors: #403e3c, #d14d41; --wgw-edge: rgba(255, 255, 255, 0.15); } }
+  body { max-width: 720px; margin: 40px auto; padding: 0 16px; font: 17px/1.5 Georgia, serif; }
+  .wgw { margin: 16px 0 40px; }
+  #curvature { --wgw-colors: #4385be, #dad8ce, #af3029; }
+</style>
+<script type="module" src="../dist/wgw.js"></script>
+</head>
+<body>
+<h1>wgw</h1>
+<p>Drag to turn, pinch or ctrl+scroll to zoom, double-click to reset.</p>
+
+<h2>Every layer kind: mesh, vectors, curve, points (click the sphere)</h2>
+<div class="wgw" data-widget="fields_widget.py" data-view="-50,25"></div>
+
+<h2>A mesh file, colored from Python as you hover</h2>
+<div class="wgw" data-src="spot.wgw" data-widget="hover_widget.py" data-pick="hover" data-up="y" data-view="-110,15"></div>
+
+<h2>Heat from a clicked vertex (Python, animated)</h2>
+<div class="wgw" data-widget="heat_widget.py" data-edges></div>
+
+<h2>A shape built in Python, reshaped by sliders</h2>
+<div class="wgw" id="curvature" data-widget="torus_widget.py" data-view="-60,35"></div>
+
+<h2>A JavaScript widget, looping</h2>
+<div class="wgw" data-widget="ripple_widget.js" data-view="-60,30" data-pick="none"></div>
+</body>
+</html>
