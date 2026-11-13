@@ -1,6 +1,9 @@
-<img src="assets/logo.svg" width="56" alt="">
-
-# wgw: web geometry widgets
+<h1>
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/banner-dark.svg">
+    <img src="assets/banner-light.svg" height="56" alt="wgw: Web Geometry Widgets">
+  </picture>
+</h1>
 
 Interactive 3D figures for web pages: meshes, point clouds, curves and vector fields, drawn by a Rust core
 compiled to WebAssembly and driven by **widgets**, short Python or JavaScript programs that respond to sliders
