@@ -6,4 +6,6 @@
 #let icon = if dark { for (light, dark) in (("#af3029", "#d14d41"),) { icon = icon.replace(light, dark, count: 1) }; icon } else { icon }
 #set page(width: auto, height: auto, margin: (x: 4pt, y: 8pt), fill: none)
 #set text(font: "Libertinus Serif", size: 40pt, weight: "semibold", fill: if dark { rgb("#cecdc3") } else { rgb("#100f0f") })
-#box(image(bytes(icon), height: 56pt), baseline: 22%)#h(10pt)Web Geometry Widgets
+// The name centered on the logo by its capitals (from cap height to baseline), not by its descenders.
+#grid(columns: 2, column-gutter: 10pt, align: horizon, image(bytes(icon), height: 56pt),
+  text(top-edge: "cap-height", bottom-edge: "baseline")[Web Geometry Widgets])
