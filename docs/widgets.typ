@@ -29,9 +29,20 @@ impl Widget for Torus {
 export!(Torus);
 ```
 
-Build it with `cargo build --release --target wasm32-unknown-unknown` (after
-`rustup target add wasm32-unknown-unknown`), and copy `target/wasm32-unknown-unknown/release/<crate>.wasm` to the
-figure's `.wgw` file.
+Build it with `cargo wgw` (after `rustup target add wasm32-unknown-unknown` and
+`cargo install --git https://github.com/frisbro303/wgw cargo-wgw`). It builds every widget crate in the package or
+workspace in release for `wasm32-unknown-unknown` and writes each one's `.wgw` file to `out`, a path relative to
+the crate, or else `target/wgw/<crate>.wgw`:
+
+```toml
+[package.metadata.wgw]             # in the crate's Cargo.toml
+out = "../figures/torus.wgw"
+
+[workspace.metadata.wgw]           # or once for a workspace: {dir} is each crate's folder, {crate} its name
+out = "../../figures/{dir}.wgw"
+```
+
+`cargo wgw -p <crate>` builds just that one.
 
 - `setup` says what the widget is: its controls, frames, panes, grid and starting pick.
 - `scene` builds the scene for a `State`: the controls' values (`state.value("R")`, `state.checked("smooth")`),

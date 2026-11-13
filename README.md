@@ -54,8 +54,8 @@ Needs Rust with the `wasm32-unknown-unknown` target and [wasm-pack](https://gith
 ```sh
 ./build.sh                     # -> dist/
 ./build.sh ../site/theme/wgw   # ... and copy it into a site
-(cd examples/torus && cargo build --release --target wasm32-unknown-unknown \
-  && cp target/wasm32-unknown-unknown/release/torus.wasm ../torus.wgw)   # the example widget
+cargo install --path cargo-wgw                       # cargo wgw: builds widgets into .wgw files
+cargo wgw --manifest-path examples/torus/Cargo.toml   # the example widget -> examples/torus.wgw
 python3 -m http.server         # examples at http://localhost:8000/examples/
 ```
 
