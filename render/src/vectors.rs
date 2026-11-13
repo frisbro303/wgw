@@ -3,9 +3,8 @@
 //! radius, default 0.006), `min`/`max`, `color`/`colors`, `pickable` (off by default).
 
 use glam::Vec3;
-use glow::HasContext;
 
-use crate::gl::{self, upload};
+use crate::gl::{self, consts as glow, upload, Gl};
 use crate::layer::{Hit, LayerData, Primitive, Style, View};
 use crate::shaders::Shaders;
 
@@ -21,12 +20,12 @@ pub struct Vectors {
 }
 
 struct Gpu {
-    vao: glow::VertexArray,
-    arrow: glow::Buffer,
-    arrow_indices: glow::Buffer,
+    vao: gl::VertexArray,
+    arrow: gl::Buffer,
+    arrow_indices: gl::Buffer,
     arrow_count: i32,
-    instances: glow::Buffer,
-    colormap: glow::Texture,
+    instances: gl::Buffer,
+    colormap: gl::Texture,
 }
 
 /// The arrow every instance draws: rings of (cos, sin, part), see VECTORS_VS for the parts.
@@ -52,7 +51,7 @@ fn arrow() -> (Vec<f32>, Vec<u32>) {
 }
 
 impl Primitive for Vectors {
-    fn sync(&mut self, gl: &glow::Context, data: &LayerData, k: usize, style: &Style) -> Result<(), String> {
+    fn sync(&mut self, gl: &dyn Gl, data: &LayerData, k: usize, style: &Style) -> Result<(), String> {
         if self.synced == Some((data.version, k)) {
             return Ok(());
         }
@@ -88,7 +87,7 @@ impl Primitive for Vectors {
         Ok(())
     }
 
-    fn draw(&self, gl: &glow::Context, shaders: &Shaders, view: &View, data: &LayerData, _style: &Style) {
+    fn draw(&self, gl: &dyn Gl, shaders: &Shaders, view: &View, data: &LayerData, _style: &Style) {
         let Some(g) = &self.gpu else { return };
         let p = &shaders.vectors;
         self.setup(gl, p, view, data);
@@ -98,7 +97,7 @@ impl Primitive for Vectors {
         self.draw_instances(gl, g);
     }
 
-    fn draw_ids(&self, gl: &glow::Context, shaders: &Shaders, view: &View, data: &LayerData, layer: u32) {
+    fn draw_ids(&self, gl: &dyn Gl, shaders: &Shaders, view: &View, data: &LayerData, layer: u32) {
         let Some(g) = &self.gpu else { return };
         let p = &shaders.vectors_ids;
         self.setup(gl, p, view, data);
@@ -111,7 +110,7 @@ impl Primitive for Vectors {
         Hit { index: id, point: self.origins.get(i..i + 3).map(Vec3::from_slice).unwrap_or(Vec3::ZERO) }
     }
 
-    fn destroy(&mut self, gl: &glow::Context) {
+    fn destroy(&mut self, gl: &dyn Gl) {
         if let Some(g) = self.gpu.take() {
             unsafe {
                 gl.delete_vertex_array(g.vao);
@@ -125,7 +124,7 @@ impl Primitive for Vectors {
 }
 
 impl Vectors {
-    fn setup(&self, gl: &glow::Context, p: &gl::Program, view: &View, data: &LayerData) {
+    fn setup(&self, gl: &dyn Gl, p: &gl::Program, view: &View, data: &LayerData) {
         p.bind(gl);
         p.mat4(gl, "uModelView", &view.model_view);
         p.mat4(gl, "uProj", &view.proj);
@@ -133,7 +132,7 @@ impl Vectors {
         p.f1(gl, "uWidth", data.number("width", 0.006) as f32 * view.radius);
     }
 
-    fn draw_instances(&self, gl: &glow::Context, g: &Gpu) {
+    fn draw_instances(&self, gl: &dyn Gl, g: &Gpu) {
         unsafe {
             gl.bind_vertex_array(Some(g.vao));
             gl.bind_buffer(glow::ELEMENT_ARRAY_BUFFER, Some(g.arrow_indices));

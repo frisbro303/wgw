@@ -4,9 +4,8 @@
 //! `color`/`colors`, `pickable` (off by default).
 
 use glam::Vec3;
-use glow::HasContext;
 
-use crate::gl::{self, upload};
+use crate::gl::{self, consts as glow, upload, Gl};
 use crate::layer::{ray_distance, Hit, LayerData, Primitive, Style, View};
 use crate::shaders::Shaders;
 
@@ -22,13 +21,13 @@ pub struct Lines {
 }
 
 struct Gpu {
-    vao: glow::VertexArray,
-    instances: glow::Buffer,
-    colormap: glow::Texture,
+    vao: gl::VertexArray,
+    instances: gl::Buffer,
+    colormap: gl::Texture,
 }
 
 impl Primitive for Lines {
-    fn sync(&mut self, gl: &glow::Context, data: &LayerData, k: usize, style: &Style) -> Result<(), String> {
+    fn sync(&mut self, gl: &dyn Gl, data: &LayerData, k: usize, style: &Style) -> Result<(), String> {
         if self.synced == Some((data.version, k)) {
             return Ok(());
         }
@@ -63,7 +62,7 @@ impl Primitive for Lines {
         Ok(())
     }
 
-    fn draw(&self, gl: &glow::Context, shaders: &Shaders, view: &View, data: &LayerData, _style: &Style) {
+    fn draw(&self, gl: &dyn Gl, shaders: &Shaders, view: &View, data: &LayerData, _style: &Style) {
         let Some(g) = &self.gpu else { return };
         let p = &shaders.lines;
         self.setup(gl, p, view, data);
@@ -73,7 +72,7 @@ impl Primitive for Lines {
         self.draw_instances(gl, g);
     }
 
-    fn draw_ids(&self, gl: &glow::Context, shaders: &Shaders, view: &View, data: &LayerData, layer: u32) {
+    fn draw_ids(&self, gl: &dyn Gl, shaders: &Shaders, view: &View, data: &LayerData, layer: u32) {
         let Some(g) = &self.gpu else { return };
         let p = &shaders.lines_ids;
         self.setup(gl, p, view, data);
@@ -89,7 +88,7 @@ impl Primitive for Lines {
         Hit { index, point: at(index) }
     }
 
-    fn destroy(&mut self, gl: &glow::Context) {
+    fn destroy(&mut self, gl: &dyn Gl) {
         if let Some(g) = self.gpu.take() {
             unsafe {
                 gl.delete_vertex_array(g.vao);
@@ -101,7 +100,7 @@ impl Primitive for Lines {
 }
 
 impl Lines {
-    fn setup(&self, gl: &glow::Context, p: &gl::Program, view: &View, data: &LayerData) {
+    fn setup(&self, gl: &dyn Gl, p: &gl::Program, view: &View, data: &LayerData) {
         p.bind(gl);
         p.mat4(gl, "uModelView", &view.model_view);
         p.mat4(gl, "uProj", &view.proj);
@@ -109,7 +108,7 @@ impl Lines {
         p.f1(gl, "uWidth", data.number("width", 2.0) as f32 * view.dpr);
     }
 
-    fn draw_instances(&self, gl: &glow::Context, g: &Gpu) {
+    fn draw_instances(&self, gl: &dyn Gl, g: &Gpu) {
         unsafe {
             gl.bind_vertex_array(Some(g.vao));
             gl.draw_arrays_instanced(glow::TRIANGLES, 0, 6, self.count);

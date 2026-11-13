@@ -1,108 +1,91 @@
 #import "@local/tdg:0.2.0": *
-#show: doc.with("widgets", title: "Writing widgets", order: 3, description: "A guide to wgw's Python widgets, by example.")
+#show: doc.with("widgets", title: "Writing widgets", order: 3, description: "Widgets in Rust with wgw-widget: controls, scenes, picks, frames, panes and embedded data.")
 
-A widget is a Python file next to a figure, named in its `data-widget`. It defines one function, `widget`, from
-the figure's mesh to a #link("/reference/#wgw.Widget")[`Widget`]: a value saying what the figure starts as, which
-controls it has, and how it responds to them.
+A widget is a small WebAssembly module that builds a figure's scene. It's written in Rust with the `wgw-widget`
+crate (any language that compiles to WebAssembly can follow the #link("/reference/#the-contract")[contract]),
+compiled to a `.wasm` file, and used as the figure's `.wgw` file. The same file runs live on a page and, in a tdg
+site, for the figure's still in a PDF.
 
-= A first widget
+= A widget
 
-Move the mouse over Spot:
+A crate with `crate-type = ["cdylib"]` and `wgw-widget` as a dependency, and a type implementing `Widget`:
 
-#widget(widget: path("../examples/hover_widget.py"), src: path("../examples/spot.obj"), pick: "hover", up: "y", view: (-110, 15))
-#source-code(path("../examples/hover_widget.py"))
+```rust
+use wgw_widget::*;
 
-```html
-<div class="wgw" data-src="spot.obj" data-widget="hover_widget.py" data-pick="hover" data-up="y"></div>
+struct Torus;
+
+impl Widget for Torus {
+    fn new(_mesh: Option<MeshData>) -> Self { Torus }           // built once
+    fn setup(&self) -> Setup {                                    // its controls and how it starts
+        Setup::new().slider("R", Slider::new(0.5, 2.0, 1.0))
+    }
+    fn scene(&self, state: &State) -> Scene {                     // the scene for a state
+        let big = state.value("R");
+        Scene::new().layer("torus", Mesh::new(vertices(big), faces()).values(curvature(big)))
+    }
+}
+
+export!(Torus);
 ```
 
-- `widget` runs once. `spot` is the figure's `data-src`, already drawn by the time Python starts; for a figure
-  without one, define `widget()` with no argument.
-- `on_pick` runs when a vertex is clicked (here, hovered), and again whenever a control moves.
-- Controls arrive as keyword arguments, named as in `controls`.
-- It returns a *scene*: layers by name. The figure's mesh is the layer `"mesh"`, so this recolors it.
+Build it with `cargo build --release --target wasm32-unknown-unknown` (after
+`rustup target add wasm32-unknown-unknown`), and copy `target/wasm32-unknown-unknown/release/<crate>.wasm` to the
+figure's `.wgw` file.
 
-= Responding to controls
+- `setup` says what the widget is: its controls, frames, panes, grid and starting pick.
+- `scene` builds the scene for a `State`: the controls' values (`state.value("R")`, `state.checked("smooth")`),
+  the picks (`state.pick()`, `state.picks`) and the animation frame (`state.frame`). It's called at the start and
+  whenever a control or a pick changes; it returns every layer it shows.
 
-`on_change` runs at the start, and whenever a control changes; it suits figures that don't need a click. This one
-builds its shape in Python, and gives readers a checkbox for the triangle grid:
+= Layers
 
-#widget(widget: path("../examples/torus_widget.py"), view: (-60, 35))
-#source-code(path("../examples/torus_widget.py"))
+A scene is layers by name: `Scene::new().layer("name", layer)`, or `.remove("name")`. Each kind is built from its
+arrays, then given parameters:
 
-Controls are #link("/reference/#wgw.Slider")[`Slider`]s, with `log=True` for one that moves in powers of ten,
-and #link("/reference/#wgw.Checkbox")[`Checkbox`]es. Every field of a `Widget` is optional, so a widget can have
-`on_change`, `on_pick`, both, or neither.
+```rust
+Mesh::new(vertices, faces)      // Vec<[f32; 3]>, Vec<[u32; 3]>
+Points::new(vertices)
+Lines::new(vertices).segments(pairs)   // each vertex to the next, unless given pairs
+Vectors::new(origins, vectors)
+```
 
-= Scenes and layers
+- `.values(v)`: a number per vertex, colored through the layer's colors (`.colors(&[...])`, or the page's) over
+  `.range(min, max)` (0 to 1 by default); or `.color("...")`, one color.
+- Colors are CSS: `"var(--link)"` and `color-mix(...)` follow the page's theme.
+- `.width(px)` for curves, `.size(px)` for points, `.flat(true)` for meshes, `.pane(1)` for a second view beside
+  the first, `.pickable(false)`, `.visible(false)`, and `.param(name, value)` for any other (see the
+  #link("/reference/")[reference]).
 
-A scene is a dict of layers by name. Each layer you return replaces the layer of that name *exactly as given*;
-`None` removes one; layers you don't name stay as they are. So here a click adds a dot without redrawing the rest,
-and unticking _arrows_ removes them:
+= Data
 
-#widget(widget: path("../examples/fields_widget.py"), view: (-50, 25))
-#source-code(path("../examples/fields_widget.py"))
+A widget carries its data: embed a mesh file, and anything else as extra arrays in a `.wgw` file, with
+`include_bytes!`. Spot and its Laplace-Beltrami spectrum, in one file:
 
-There are four kinds of layer, #link("/reference/#wgw.Mesh")[`Mesh`], #link("/reference/#wgw.Points")[`Points`],
-#link("/reference/#wgw.Lines")[`Lines`] and #link("/reference/#wgw.Vectors")[`Vectors`]. Any of them is colored
-by `values` (numbers per vertex, 0 for the first of the figure's colors, 1 for the last) or by one `color`.
-
-Layers are values: `.with_values(...)` and `.replace(...)` make new layers that share the arrays they don't
-change. That matters for speed, since an array is sent to the page only when it's a new object: returning
-`sphere.with_values(...)` sends only the values. Make new arrays rather than changing ones you've returned.
-
-= Animation
-
-Give `values` or `vertices` a leading frames axis, `(frames, n)` or `(frames, n, 3)`, and the frames play at the
-widget's `fps`, once (or forever, with `loop=True`). When a slider moves, the last frame shows at once. Click the
-sphere:
-
-#widget(widget: path("../examples/heat_widget.py"))
-#source-code(path("../examples/heat_widget.py"))
-
-= Work done once, and data files
-
-Anything expensive goes in `widget` itself, like the eigendecomposition above; the functions it returns close over
-it, so nothing lives in globals. A widget reads files with paths relative to itself:
-
-```python
-def widget(spot: Mesh) -> Widget:
-    spectrum = np.load("spot-spectrum.npz")                             # beside the widget
-    embedding = spectrum["evecs"] * np.exp(-spectrum["evals"] * 0.3)    # once
-
-    def on_pick(vertex, epsilon):                                       # on every click
-        d2 = np.sum((embedding - embedding[vertex]) ** 2, axis=1)
-        return {"mesh": spot.with_values(np.exp(-d2 / epsilon))}
+```rust
+fn new(_mesh: Option<MeshData>) -> Self {
+    let spot = MeshData::parse(include_bytes!("spot.wgw")).unwrap();   // .wgw or .obj
+    let (evecs, shape) = spot.array("evecs").unwrap();                // extra arrays, as floats
     ...
+}
 ```
 
-In the browser, each file is fetched from beside the widget the first time it's opened (by `open`, `np.load`,
-`Mesh.load`, ...), so the same code runs in the browser and on your machine. Heavy precomputation, like the
-spectrum of a big mesh, is best done offline and saved next to the widget. The figure's own mesh is best given as
-`data-src`, which is drawn before Python starts.
+`spot.vertices` and `spot.faces` are its mesh. `new` runs once; keep whatever `scene` needs.
 
-Widgets can import NumPy and anything else
-#link("https://pyodide.org/en/stable/usage/packages-in-pyodide.html")[Pyodide ships], such as SciPy, which loads
-the first time it's imported.
+= Picks
 
-= Which layer was clicked
+A click on a pickable layer (meshes and points, unless `.pickable(false)`) reaches `scene` as `state.pick()`: the
+vertex, its layer, the point clicked and the frame on screen. `Setup::picked(vertex)` starts with a vertex of the
+layer `mesh` picked, so the figure opens showing something; `Setup::keep_picks()` keeps every click
+(`state.picks`) rather than the latest. With `data-pick="hover"`, picks follow the mouse.
 
-Meshes and points can be picked (pass `pickable=False` to let clicks through to what's behind, or `True` to pick
-curves and arrows). Give `on_pick` a `layer` parameter to be told which layer the vertex is in:
+= Frames
 
-```python
-def on_pick(vertex, epsilon, layer):
-    if layer != "mesh":
-        return None
-    ...
-```
+`Setup::frames(n)` makes an animation: `scene` is asked for each frame, `state.frame` from 0 to n - 1, and the
+page plays them in a loop (`.fps(20.0)`, or `.once()`). A still draws frame 0 alone, so widgets never build frames
+they don't need.
 
-With `data-pick="hover"`, `on_pick` follows the mouse instead; touch screens still tap.
+= Panes
 
-= When it runs, and errors
-
-Widgets run in a worker, so a slow one never freezes the page. While a widget is busy, a newer call replaces the
-waiting one, so dragging a slider never builds up a backlog. Python starts loading as soon as the page is idle.
-
-If a widget raises an error, its last line shows in the figure's corner, and the traceback is in the browser's
-console.
+Layers with `.pane(1)` are drawn in a second view beside the first, with its own camera and fit;
+`Setup::panes(&[2.0, 1.0])` gives the first two thirds of the width. Each pane turns on its own.

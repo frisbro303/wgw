@@ -4,6 +4,7 @@
 
 use glam::{Mat4, Vec2, Vec3};
 
+use crate::gl::Gl;
 use crate::shaders::Shaders;
 use crate::{lines, mesh, points, vectors};
 
@@ -36,13 +37,13 @@ pub struct Hit {
 
 pub trait Primitive {
     /// Upload frame k of the layer, if it changed since the last call.
-    fn sync(&mut self, gl: &glow::Context, data: &LayerData, k: usize, style: &Style) -> Result<(), String>;
-    fn draw(&self, gl: &glow::Context, shaders: &Shaders, view: &View, data: &LayerData, style: &Style);
+    fn sync(&mut self, gl: &dyn Gl, data: &LayerData, k: usize, style: &Style) -> Result<(), String>;
+    fn draw(&self, gl: &dyn Gl, shaders: &Shaders, view: &View, data: &LayerData, style: &Style);
     /// Draw (layer, element) ids for picking.
-    fn draw_ids(&self, gl: &glow::Context, shaders: &Shaders, view: &View, data: &LayerData, layer: u32);
+    fn draw_ids(&self, gl: &dyn Gl, shaders: &Shaders, view: &View, data: &LayerData, layer: u32);
     /// Turn the element id the GPU found under the cursor, and the ray through it (in the layer's units), into a hit.
     fn hit(&mut self, id: u32, origin: Vec3, dir: Vec3) -> Hit;
-    fn destroy(&mut self, gl: &glow::Context);
+    fn destroy(&mut self, gl: &dyn Gl);
 }
 
 pub struct Layer {

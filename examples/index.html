@@ -15,21 +15,14 @@
 </head>
 <body>
 <h1>wgw</h1>
-<p>Drag to turn, pinch or ctrl+scroll to zoom, double-click to reset.</p>
+<p>Drag to turn, pinch or ctrl+scroll to zoom, double-click to reset. Build the torus widget first
+(examples/torus: <code>cargo build --release --target wasm32-unknown-unknown</code>, then copy its .wasm to
+torus.wgw).</p>
 
-<h2>Every layer kind: mesh, vectors, curve, points (click the sphere)</h2>
-<div class="wgw" data-widget="fields_widget.py" data-view="-50,25"></div>
+<h2>A widget: a torus colored by its curvature, reshaped by sliders</h2>
+<div class="wgw" id="curvature" data-src="torus.wgw" data-view="-60,35"></div>
 
-<h2>A mesh file, colored from Python as you hover</h2>
-<div class="wgw" data-src="spot.wgw" data-widget="hover_widget.py" data-pick="hover" data-up="y" data-view="-110,15"></div>
-
-<h2>Heat from a clicked vertex (Python, animated)</h2>
-<div class="wgw" data-widget="heat_widget.py"></div>
-
-<h2>A shape built in Python, reshaped by sliders</h2>
-<div class="wgw" id="curvature" data-widget="torus_widget.py" data-view="-60,35"></div>
-
-<h2>A JavaScript widget, looping</h2>
-<div class="wgw" data-widget="ripple_widget.js" data-view="-60,30" data-pick="none"></div>
+<h2>A mesh file</h2>
+<div class="wgw" data-src="spot.wgw" data-up="y" data-view="-110,15"></div>
 </body>
 </html>

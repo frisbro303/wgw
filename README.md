@@ -5,30 +5,47 @@
   </picture>
 </h1>
 
-Interactive 3D figures for web pages: meshes, point clouds, curves and vector fields, drawn by a Rust core
-compiled to WebAssembly and driven by **widgets**, short Python or JavaScript programs that respond to sliders
-and clicks. Python runs in the browser with Pyodide, off the page's thread.
+Interactive 3D figures for web pages and PDFs: meshes, point clouds, curves and vector fields, drawn by a Rust
+core compiled to WebAssembly and driven by **widgets**: small WebAssembly modules, written in Rust, that respond to
+sliders and clicks. A figure is one `.wgw` file, a widget with its data inside, or a mesh.
 
 ```html
 <script type="module" src="wgw/wgw.js"></script>
-<div class="wgw" data-src="spot.obj" data-widget="distance_widget.py" data-up="y"></div>
+<div class="wgw" data-src="distance.wgw" data-up="y"></div>
 ```
 
-```python
-# distance_widget.py: click Spot to color it by diffusion distance from the clicked vertex
-import numpy as np
-from wgw import Mesh, Points, Slider, Widget
+```rust
+// Click Spot to color it by diffusion distance from the clicked vertex.
+use wgw_widget::*;
 
-def widget(spot: Mesh) -> Widget:
-    spectrum = np.load("spot-spectrum.npz")
-    embedding = spectrum["evecs"] * np.exp(-spectrum["evals"] * 0.3)
+struct Distance { spot: MeshData, embedding: Vec<f32>, k: usize }
 
-    def on_pick(vertex, epsilon):
-        d2 = np.sum((embedding - embedding[vertex]) ** 2, axis=1)
-        return {"mesh": spot.with_values(np.exp(-d2 / epsilon)), "dot": Points(spot.vertices[vertex])}
+impl Widget for Distance {
+    fn new(_mesh: Option<MeshData>) -> Self {
+        let spot = MeshData::parse(include_bytes!("spot.wgw")).unwrap();  // Spot and its spectrum, embedded
+        let (embedding, k) = diffusion_map(&spot);
+        Distance { spot, embedding, k }
+    }
+    fn setup(&self) -> Setup {
+        Setup::new().slider("epsilon", Slider::new(0.001, 1.0, 0.02).log()).picked(925).grid(true)
+    }
+    fn scene(&self, state: &State) -> Scene {
+        let v = state.pick().unwrap().vertex as usize;
+        let at = &self.embedding[v * self.k..(v + 1) * self.k];
+        let values = self.embedding.chunks_exact(self.k)
+            .map(|x| (-x.iter().zip(at).map(|(a, b)| (a - b).powi(2)).sum::<f32>() / state.value("epsilon")).exp())
+            .collect();
+        Scene::new()
+            .layer("mesh", Mesh::new(self.spot.vertices.clone(), self.spot.faces.clone()).values(values))
+            .layer("dot", Points::new(vec![self.spot.vertices[v]]))
+    }
+}
 
-    return Widget(controls={"epsilon": Slider(0.001, 1.0, 0.02, log=True)}, on_pick=on_pick, grid=True)
+export!(Distance);
 ```
+
+In a [tdg](https://github.com/frisbro303/tdg) site, `#widget(path("distance.wgw"))` makes the same figure, and its
+PDF shows the figure's first frame, drawn by wgw's own renderer with the page's shaders.
 
 ## Build
 
@@ -37,6 +54,8 @@ Needs Rust with the `wasm32-unknown-unknown` target and [wasm-pack](https://gith
 ```sh
 ./build.sh                     # -> dist/
 ./build.sh ../site/theme/wgw   # ... and copy it into a site
+(cd examples/torus && cargo build --release --target wasm32-unknown-unknown \
+  && cp target/wasm32-unknown-unknown/release/torus.wasm ../torus.wgw)   # the example widget
 python3 -m http.server         # examples at http://localhost:8000/examples/
 ```
 
@@ -44,7 +63,7 @@ python3 -m http.server         # examples at http://localhost:8000/examples/
 
 **https://frisbro303.github.io/wgw/**, with live figures: [figures](https://frisbro303.github.io/wgw/figures/),
 [writing widgets](https://frisbro303.github.io/wgw/widgets/), the
-[Python reference](https://frisbro303.github.io/wgw/reference/),
-[JavaScript](https://frisbro303.github.io/wgw/javascript/) and
+[reference](https://frisbro303.github.io/wgw/reference/),
+[the page API](https://frisbro303.github.io/wgw/javascript/) and
 [internals](https://frisbro303.github.io/wgw/internals/). They're Typst pages in [`docs/`](docs), a
 [tdg](https://github.com/frisbro303/tdg) site: `typst compile --root . --features html,bundle --format bundle docs/site.typ docs/_site`.

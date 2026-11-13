@@ -3,9 +3,8 @@
 //! `color`/`colors`, `edge_color`, `pickable` (on by default).
 
 use glam::Vec3;
-use glow::HasContext;
 
-use crate::gl::{self, upload};
+use crate::gl::{self, consts as glow, upload, Gl};
 use wgw_scene::geometry::{unique_edges, vertex_normals};
 
 use crate::layer::{Hit, LayerData, Primitive, Style, View};
@@ -24,17 +23,17 @@ pub struct Mesh {
 }
 
 struct Gpu {
-    vao: glow::VertexArray,
-    position: glow::Buffer,
-    normal: glow::Buffer,
-    value: glow::Buffer,
-    faces: glow::Buffer,
-    edges: glow::Buffer,
-    colormap: glow::Texture,
+    vao: gl::VertexArray,
+    position: gl::Buffer,
+    normal: gl::Buffer,
+    value: gl::Buffer,
+    faces: gl::Buffer,
+    edges: gl::Buffer,
+    colormap: gl::Texture,
 }
 
 impl Mesh {
-    fn gpu(&mut self, gl: &glow::Context) -> &Gpu {
+    fn gpu(&mut self, gl: &dyn Gl) -> &Gpu {
         self.gpu.get_or_insert_with(|| unsafe {
             let vao = gl.create_vertex_array().expect("create vertex array");
             gl.bind_vertex_array(Some(vao));
@@ -49,7 +48,7 @@ impl Mesh {
 }
 
 impl Primitive for Mesh {
-    fn sync(&mut self, gl: &glow::Context, data: &LayerData, k: usize, style: &Style) -> Result<(), String> {
+    fn sync(&mut self, gl: &dyn Gl, data: &LayerData, k: usize, style: &Style) -> Result<(), String> {
         if self.synced == Some((data.version, k)) {
             return Ok(());
         }
@@ -91,7 +90,7 @@ impl Primitive for Mesh {
         Ok(())
     }
 
-    fn draw(&self, gl: &glow::Context, shaders: &Shaders, view: &View, data: &LayerData, style: &Style) {
+    fn draw(&self, gl: &dyn Gl, shaders: &Shaders, view: &View, data: &LayerData, style: &Style) {
         let Some(g) = &self.gpu else { return };
         let p = &shaders.mesh;
         let edges = data.flag("edges", style.grid) && self.edge_count > 0;
@@ -129,7 +128,7 @@ impl Primitive for Mesh {
         }
     }
 
-    fn draw_ids(&self, gl: &glow::Context, shaders: &Shaders, view: &View, _data: &LayerData, layer: u32) {
+    fn draw_ids(&self, gl: &dyn Gl, shaders: &Shaders, view: &View, _data: &LayerData, layer: u32) {
         let Some(g) = &self.gpu else { return };
         let p = &shaders.mesh_ids;
         p.bind(gl);
@@ -172,7 +171,7 @@ impl Primitive for Mesh {
         Hit { index, point }
     }
 
-    fn destroy(&mut self, gl: &glow::Context) {
+    fn destroy(&mut self, gl: &dyn Gl) {
         if let Some(g) = self.gpu.take() {
             unsafe {
                 gl.delete_vertex_array(g.vao);

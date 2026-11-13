@@ -1,0 +1,14 @@
+[package]
+name = "wgw-render"
+version = "0.2.0"
+edition = "2021"
+description = "wgw's renderer: scenes of layers drawn through a small GL trait with wgw's WGSL shaders, by WebGL on a page or on the CPU for stills."
+
+[dependencies]
+wgw-scene = { path = "../scene" }
+glam = "0.30"
+bytemuck = "1"
+
+[build-dependencies]
+# Translates the WGSL shaders to GLSL for WebGL (build.rs).
+naga = { version = "26", features = ["wgsl-in", "glsl-out"] }

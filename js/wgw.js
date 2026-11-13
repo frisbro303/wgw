@@ -1,25 +1,24 @@
 // wgw: interactive meshes, points, curves and vector fields, drawn by a Rust core compiled to WebAssembly and
-// driven by widgets in Python, JavaScript, or anything a runner is registered for (see runners.js).
+// driven by widgets: small WebAssembly modules (see widget.js), written in Rust with wgw-widget.
 //
 // Any <div class="wgw"> becomes a viewer. Its data attributes:
-//   data-src="spot.obj"        a mesh file, .obj or .wgw (from python/wgw.py), parsed by the core and shown as
-//                              the layer "mesh"; a widget gets it as widget(mesh)
-//   data-widget="x_widget.py"  a widget that builds, colors or reshapes the scene: .py or .js
+//   data-src="spot.wgw"        the figure: a widget (a .wgw file holding a WebAssembly module, with any data it
+//                              needs inside), or a mesh (.obj, or a .wgw file of arrays) shown as the layer "mesh"
 //   data-up="z"                the axis that points up: x, y or z
 //   data-view="-60,20"         the starting camera: turn and tilt, in degrees
-//   data-pick="click"          when the widget's pick runs: click, hover or none
+//   data-pick="click"          when a pick reaches the widget: click, hover or none
 //   data-flat                  flat shading for the "mesh" layer
 //   data-credit="false"        no "wgw" link in the corner
 // CSS custom properties style it: --wgw-colors (the colors values run through), --wgw-accent (points,
 // curves and arrows without values), --wgw-edge, --wgw-height.
 //
 // From JS: WGW.mount(element, options) returns the viewer: viewer.on("pick", fn), viewer.apply(patch),
-// viewer.reset(); WGW.runners to add a language.
+// viewer.reset().
 
 import init, { Viewer as Core } from "./core/wgw_core.js";
-import { loadMesh, meshArrays } from "./io.js";
-import { animates, controlInputs, toPatch } from "./patch.js";
-import { runnerFor, runners } from "./runners.js";
+import { fetchBytes, parseMesh } from "./io.js";
+import { animates, controlInputs } from "./patch.js";
+import { isWidget, loadWidget, stackFrames } from "./widget.js";
 import { readStyle, rgbaList } from "./style.js";
 
 let wasm = null;
@@ -86,7 +85,6 @@ export class Viewer {
     this.el = el;
     this.options = {
       src: options.src ?? d.src,
-      widget: options.widget ?? d.widget,
       up: options.up ?? d.up ?? "z",
       view: options.view || parseView(d.view),
       pick: options.pick ?? d.pick ?? "click",
@@ -113,8 +111,8 @@ export class Viewer {
     }
 
     this.controls = {};
-    this.functions = [];
-    this.pending = new Map();
+    this.widget = null;
+    this.picks = [];  // the widget's picks so far (only the latest, unless it keeps them)
     this.lastPick = null;
     this.themed = {};  // layer colors that use CSS variables, by layer and parameter, re-read when the theme changes
     this.visible = false;
@@ -146,19 +144,22 @@ export class Viewer {
   async start() {
     const o = this.options;
     try {
-      if (o.src) {  // parsed and shown by the core right away, then handed to the widget
-        const file = await loadMesh(o.src);
+      if (o.src) {
+        const bytes = await fetchBytes(o.src);
+        if (isWidget(bytes)) {
+          await this.startWidget(bytes);
+          return;
+        }
+        // A mesh: parsed and shown by the core.
+        const file = parseMesh(bytes, o.src);
         try {
           this.core.set_mesh_file("mesh", file);
           if (o.flat) this.core.set_number("mesh", "flat", 1);
-          if (o.widget) this.arrays = meshArrays(file);
         } finally {
           file.free();
         }
-        this.requestRender();
       }
-      if (o.widget) await this.startWidget();
-      else this.reveal();
+      this.reveal();
     } catch (err) {
       this.fail(err);
     }
@@ -308,31 +309,28 @@ export class Viewer {
     if (hovering && this.lastPick && this.lastPick.layer === layer && this.lastPick.index === index) return;
     this.lastPick = { layer, index, point: [x, y, z] };
     this.el.dispatchEvent(new CustomEvent("wgw:pick", { detail: { layer, index, point: [x, y, z] } }));
-    if (this.functions.includes("pick")) this.call("pick", !hovering);
+    if (!this.widget) return;
+    const pick = { vertex: index, layer, point: [x, y, z], frame: this.core.current_frame() };  // where, and when
+    this.picks = this.keepPicks ? [...this.picks, pick] : [pick];
+    this.update(!hovering);
   }
 
   // ---- widgets
 
-  async startWidget() {
-    const url = this.options.widget;
-    this.runner = runnerFor(url);
-
-    this.key = `${url.split("/").pop()}#${++widgetCount}`;
-    const info = await this.runner.load(this.key, url, this.arrays || null);
-    this.functions = info.functions;
+  async startWidget(bytes) {
+    this.widget = await loadWidget(bytes);
+    const info = this.widget.setup();
+    this.frames = Math.max(1, info.frames || 1);
     this.fps = info.fps;
     this.loop = info.loop;
-    this.core.set_grid(!!info.grid);
+    this.keepPicks = !!info.keepPicks;
+    const toggle = info.grid && typeof info.grid === "object";
+    this.core.set_grid(toggle ? !!info.grid.toggle : !!info.grid);
     if (info.panes) this.core.set_pane_widths(Float32Array.from(info.panes));
-    if (info.picked != null && this.lastPick === null) this.lastPick = { layer: "mesh", index: info.picked };  // the widget's starting pick
-    this.buildControls(controlInputs(info.controls));
-    this.apply(info.result, true);
-    this.widgetReady = true;
-    if (this.functions.includes("change")) this.call("change", false);
-    this.requestRender();
-    if (this.lastPick && this.functions.includes("pick")) this.call("pick", false);
-    this.revealWhenIdle = true;  // after the first results are drawn
-    if (!this.busy && !this.pending.size) this.reveal();
+    if (info.picked != null) this.picks = [{ vertex: info.picked, layer: "mesh", point: null, frame: 0 }];  // its starting pick
+    this.buildControls(controlInputs({ ...info.controls, ...(toggle ? { grid: !!info.grid.toggle } : {}) }));
+    this.revealWhenIdle = true;  // once its first scene is drawn
+    this.update(true);
   }
 
   buildControls(spec) {
@@ -359,35 +357,34 @@ export class Viewer {
         if (viewer) { this.core.set_grid(value); this.requestRender(); return; }
         this.controls[name] = value;
         if (input.type !== "checkbox") { output.textContent = show(value); fill(input); }
-        if (this.functions.includes("change")) this.call("change", false);
-        if (this.functions.includes("pick") && this.lastPick) this.call("pick", false);
+        this.update(false);
       });
       this.controlsEl.appendChild(label);
     }
   }
 
-  // Run a widget function, with at most one call in flight: while it's busy, a newer call to the same function
-  // replaces the waiting one, so dragging a slider never builds up a backlog.
-  call(name, animate) {
-    this.pending.set(name, { name, animate });
-    if (this.widgetReady && !this.busy) this.flush();
+  // Ask the widget for its scene in the current state (every frame of an animation, stacked), at most one at a
+  // time: while it's busy, newer requests collapse into one, so dragging a slider never builds up a backlog.
+  update(animate) {
+    this.wanted = { animate: animate || this.wanted?.animate };
+    if (!this.busy) this.flush();
   }
 
   async flush() {
-    const next = this.pending.values().next();
-    if (next.done) return;
-    const job = next.value;
-    this.pending.delete(job.name);
+    if (!this.wanted || !this.widget) return;
+    const { animate } = this.wanted;
+    this.wanted = null;
     this.busy = true;
     try {
-      const pick = this.lastPick || { index: null, layer: null };
-      const where = { point: pick.point ?? null, frame: this.core.current_frame() };  // the exact spot, and when
-      this.apply(await this.runner.call(this.key, job.name, pick.index, pick.layer, { ...this.controls }, where), job.animate);
+      await null;  // let input events in between scenes
+      const state = (frame) => ({ controls: { ...this.controls }, picks: this.picks, frame });
+      const frames = Array.from({ length: this.frames }, (_, k) => this.widget.scene(null, state(k)));
+      this.apply(stackFrames(frames), animate);
     } catch (err) {
       this.fail(err);
     }
     this.busy = false;
-    if (this.revealWhenIdle && !this.pending.size) this.reveal();
+    if (this.revealWhenIdle && !this.wanted) this.reveal();
     this.flush();
   }
 }
@@ -402,11 +399,6 @@ function autoload() {
   document.head.prepend(style);  // first, so the page's own CSS wins
   const els = document.querySelectorAll(".wgw");
   els.forEach((el) => mount(el));
-  // Runners that take a while to start (Python takes seconds) begin as soon as the page is idle.
-  for (const el of els) {
-    const runner = el.dataset.widget && runners[el.dataset.widget.split(/[?#]/)[0].split(".").pop()];
-    if (runner && runner.preload) (window.requestIdleCallback || setTimeout)(runner.preload);
-  }
   // Follow theme switches: an attribute on <html> or <body> (data-md-color-scheme is MkDocs Material's), or the
   // system setting.
   const restyle = () => viewers.forEach((v) => v.restyle());
@@ -417,4 +409,4 @@ function autoload() {
 
 if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", autoload); else autoload();
 
-window.WGW = { mount, Viewer, loadMesh, runners, toPatch, version: "0.2.0" };
+window.WGW = { mount, Viewer, loadWidget, version: "0.3.0" };

@@ -1,28 +1,29 @@
 #import "@local/tdg:0.2.0": *
-#show: doc.with("index", title: "Overview", order: 1, description: "Interactive 3D figures for the web, driven by Python and JavaScript widgets.")
+#show: doc.with("index", title: "Overview", order: 1, description: "Interactive 3D figures for the web and for PDFs, driven by widgets compiled to WebAssembly.")
 
-wgw draws interactive 3D figures on web pages: meshes, point clouds, curves and vector fields, with a Rust core
-compiled to WebAssembly. A figure can be driven by a *widget*, a short Python or JavaScript program that responds
-to sliders and clicks. Python runs in the browser with Pyodide, off the page's thread.
+wgw draws interactive 3D figures: meshes, point clouds, curves and vector fields, with a Rust core compiled to
+WebAssembly. A figure can be driven by a *widget*: a small WebAssembly module, written in Rust, that responds to
+sliders and clicks. A figure is one file, `.wgw`: a widget with any data it needs inside, or just a mesh.
 
-#widget(widget: path("../examples/fields_widget.py"), view: (-50, 25),
-        alt: "A sphere colored by a function, with its gradient as arrows and a level curve")
+#widget(path("../examples/torus.wgw"), view: (-60, 35),
+        alt: "A torus colored by its Gaussian curvature, reshaped by two sliders")
 
-Drag to turn it, click to place a point. It's this widget:
+Drag to turn it; the sliders reshape it. It's this widget, in Rust:
 
-#source-code(path("../examples/fields_widget.py"))
+#source-code(path("../examples/torus/src/lib.rs"))
 
 on a page with this HTML:
 
 ```html
 <script type="module" src="wgw/wgw.js"></script>
-<div class="wgw" data-widget="fields_widget.py"></div>
+<div class="wgw" data-src="torus.wgw"></div>
 ```
 
-or, in a #link("https://github.com/frisbro303/tdg")[tdg] site, this Typst:
+or, in a #link("https://github.com/frisbro303/tdg")[tdg] site, this Typst, where a PDF shows the figure's first
+frame, drawn by wgw's own renderer with the page's shaders:
 
 ```typ
-#widget(widget: path("fields_widget.py"))
+#widget(path("torus.wgw"))
 ```
 
 = Getting it
@@ -36,13 +37,12 @@ which needs Rust with the `wasm32-unknown-unknown` target, and
 ./build.sh ../site/theme/wgw   # ... and copy it into a site
 ```
 
-Then serve `dist/` with your pages. Figures need WebGL2; Python widgets download Pyodide and NumPy (a few MB) on
-a first visit. tdg sites have wgw built in.
+Then serve `dist/` with your pages. Figures need WebGL2. tdg sites have wgw built in.
 
 = Next
 
 - #link("/figures/")[Figures]: putting a figure on a page, its options and styling, mesh files
-- #link("/widgets/")[Writing widgets]: a guide, by example
-- #link("/reference/")[Python reference]: `Widget`, controls, layers, meshes, shapes, files
-- #link("/javascript/")[JavaScript]: widgets in JavaScript, the page API, other languages
+- #link("/widgets/")[Writing widgets]: widgets in Rust, by example
+- #link("/reference/")[Reference]: layers and their parameters, and a widget's contract, for other languages
+- #link("/javascript/")[The page API]: figures from JavaScript
 - #link("/internals/")[Internals]: how it works, and extending it

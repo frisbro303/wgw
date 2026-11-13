@@ -6,22 +6,23 @@ figure:
 
 ```html
 <script type="module" src="wgw/wgw.js"></script>
-<div class="wgw" data-src="meshes/spot.obj" data-widget="distance_widget.py" data-up="y" data-view="90,10"></div>
+<div class="wgw" data-src="distance.wgw" data-up="y" data-view="90,10"></div>
 ```
 
-A figure needs a browser with WebGL2. It loads when it nears the screen, and draws only while on it. It doesn't
-need a widget: this is just `data-src`, `data-up` and `data-view`.
+A figure needs a browser with WebGL2. It loads when it nears the screen, and draws only while on it. Its file is a
+widget or a mesh: this one is just a mesh (`data-src`, `data-up` and `data-view`).
 
-#widget(src: path("../examples/spot.obj"), up: "y", view: (-110, 15), alt: "Keenan Crane's Spot, a cow")
+#widget(path("../examples/spot.obj"), up: "y", view: (-110, 15), alt: "Keenan Crane's Spot, a cow")
 
 = In Typst
 
 In a #link("https://github.com/frisbro303/tdg")[tdg] site, `widget(...)` makes the same figure, numbered and
-captioned like any other; tdg publishes its files (given as paths) with the site, and a PDF shows its still:
+captioned like any other; tdg publishes its file (given as a path) with the site, and a PDF shows its first
+frame: tdg runs the widget (as a Typst plugin) and wgw's own renderer draws it on the CPU (wgw-still), with the
+page's shaders:
 
 ```typ
-#widget(widget: path("distance_widget.py"), src: path("meshes/spot.obj"), data: (path("spectrum.npz"),),
-        up: "y", view: (90, 10), still: image("distance_widget.png"), caption: [Diffusion distance on Spot.])
+#widget(path("distance.wgw"), up: "y", view: (90, 10), caption: [Diffusion distance on Spot.])
 ```
 
 = Attributes
@@ -29,11 +30,10 @@ captioned like any other; tdg publishes its files (given as paths) with the site
 #table(
   columns: 3,
   [*attribute*], [*default*], [],
-  [`data-src`], [], [a mesh file, `.obj` or `.wgw`; shown as the layer `mesh`],
-  [`data-widget`], [], [a widget, `.py` or `.js` (#link("/widgets/")[writing widgets])],
+  [`data-src`], [], [the figure: a widget (a `.wgw` file holding WebAssembly; #link("/widgets/")[writing widgets]), or a mesh (`.obj`, or a `.wgw` file of arrays), shown as the layer `mesh`],
   [`data-up`], [`z`], [the axis that points up: `x`, `y` or `z`],
   [`data-view`], [`-60,20`], [the starting camera: turn about the up axis, then tilt, in degrees; then, optionally, a scale (`-60,20,1.5` shows the scene half again as large, for a wide scene the fit leaves small)],
-  [`data-pick`], [`click`], [when the widget's `on_pick` runs: `click`, `hover` or `none`],
+  [`data-pick`], [`click`], [when a pick reaches the widget: `click`, `hover` or `none`],
   [`data-flat`], [off], [flat shading for the `mesh` layer],
   [`data-label`], [], [the figure's accessible description],
   [`data-credit`], [on], [a small "wgw" link in the corner; `"false"` hides it (or `.wgw-credit { display: none }`)],
@@ -44,16 +44,17 @@ captioned like any other; tdg publishes its files (given as paths) with the site
 Drag to turn (it glides on), pinch or ctrl/cmd+scroll to zoom, double-click to reset. Plain scrolling scrolls
 the page, so figures never trap it.
 
-= Mesh files
+= Files
 
-The page fetches `data-src` and the core parses it, so the mesh is drawn at once, before any widget has started;
-then the widget gets it as `widget(mesh)`.
+A figure's file is told apart by its first bytes, whatever its name:
 
+- *A widget*: a WebAssembly module (#link("/widgets/")[writing widgets]), with any data it needs inside. wgw runs
+  it; it builds the scene.
+- *`.wgw` arrays*: a mesh (vertices and faces) plus any other arrays, in wgw's container: `WGW1`, the header's
+  length (a little-endian u32), a JSON header `{"arrays": {name: {dtype, shape, offset}}}`, then the arrays. Shown
+  as the layer `mesh`. A widget can embed one (`MeshData::parse(include_bytes!("spot.wgw"))`).
 - *`.obj`*: Wavefront OBJ. Triangles and polygons (split into fans), 1-based or negative indices. Texture
   coordinates and normals are ignored, so the vertices are exactly the file's `v` lines, in order.
-- *`.wgw`*: a mesh plus any arrays its widget needs (a spectrum, say), which the widget gets as attributes
-  (`mesh.evecs`). Write one with `Mesh(vertices, faces).save("spot.wgw", evecs=...)`; see the
-  #link("/reference/#wgw.save")[Python reference].
 
 = Styling
 

@@ -463,11 +463,21 @@ dependencies = [
  "glam",
  "glow",
  "js-sys",
- "naga",
  "serde",
  "serde_json",
  "wasm-bindgen",
  "web-sys",
+ "wgw-render",
+ "wgw-scene",
+]
+
+[[package]]
+name = "wgw-render"
+version = "0.2.0"
+dependencies = [
+ "bytemuck",
+ "glam",
+ "naga",
  "wgw-scene",
 ]
 

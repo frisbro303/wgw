@@ -1,10 +1,13 @@
 //! wgw's shaders: written in WGSL (shaders/), translated to GLSL for WebGL by build.rs. Each program is a vertex
 //! and a fragment shader, in pairs: a lit color pass and an id pass that writes (layer, element) for picking.
 
-use crate::gl::Program;
+use crate::gl::{Gl, Program};
 
 /// A program as build.rs generates it: its GLSL, and how to feed it.
 pub struct ShaderDef {
+    /// The WGSL file it's from (without common.wgsl, which every file gets), and its two entry points.
+    pub module: &'static str,
+    pub entry_points: (&'static str, &'static str),
     pub vertex: &'static str,
     pub fragment: &'static str,
     /// Its uniform block's name in each stage that uses it.
@@ -32,7 +35,7 @@ pub struct Shaders {
 }
 
 impl Shaders {
-    pub fn new(gl: &glow::Context) -> Result<Self, String> {
+    pub fn new(gl: &dyn Gl) -> Result<Self, String> {
         let p = |def: &'static ShaderDef| Program::new(gl, def);
         Ok(Shaders {
             mesh: p(&MESH)?,

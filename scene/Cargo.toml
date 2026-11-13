@@ -2,7 +2,7 @@
 name = "wgw-scene"
 version = "0.2.0"
 edition = "2021"
-description = "wgw's scene, without a renderer: arrays, layers, mesh files, the camera, framing, colors and lighting. Shared by the WebGL viewer and the SVG stills."
+description = "wgw's scene, without a renderer: arrays, layers, mesh files, the camera and framing."
 
 [dependencies]
 glam = "0.30"

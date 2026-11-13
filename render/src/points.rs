@@ -3,9 +3,8 @@
 //! default 0.02, so points on a surface sit on top of it), `min`/`max`, `color`/`colors`, `pickable` (on by default).
 
 use glam::Vec3;
-use glow::HasContext;
 
-use crate::gl::{self, upload};
+use crate::gl::{self, consts as glow, upload, Gl};
 use crate::layer::{Hit, LayerData, Primitive, Style, View};
 use crate::shaders::Shaders;
 
@@ -18,14 +17,14 @@ pub struct Points {
 }
 
 struct Gpu {
-    vao: glow::VertexArray,
-    position: glow::Buffer,
-    value: glow::Buffer,
-    colormap: glow::Texture,
+    vao: gl::VertexArray,
+    position: gl::Buffer,
+    value: gl::Buffer,
+    colormap: gl::Texture,
 }
 
 impl Primitive for Points {
-    fn sync(&mut self, gl: &glow::Context, data: &LayerData, k: usize, style: &Style) -> Result<(), String> {
+    fn sync(&mut self, gl: &dyn Gl, data: &LayerData, k: usize, style: &Style) -> Result<(), String> {
         if self.synced == Some((data.version, k)) {
             return Ok(());
         }
@@ -50,7 +49,7 @@ impl Primitive for Points {
         Ok(())
     }
 
-    fn draw(&self, gl: &glow::Context, shaders: &Shaders, view: &View, data: &LayerData, _style: &Style) {
+    fn draw(&self, gl: &dyn Gl, shaders: &Shaders, view: &View, data: &LayerData, _style: &Style) {
         let Some(g) = &self.gpu else { return };
         let p = &shaders.points;
         p.bind(gl);
@@ -69,7 +68,7 @@ impl Primitive for Points {
         }
     }
 
-    fn draw_ids(&self, gl: &glow::Context, shaders: &Shaders, view: &View, data: &LayerData, layer: u32) {
+    fn draw_ids(&self, gl: &dyn Gl, shaders: &Shaders, view: &View, data: &LayerData, layer: u32) {
         let Some(g) = &self.gpu else { return };
         let p = &shaders.points_ids;
         p.bind(gl);
@@ -92,7 +91,7 @@ impl Primitive for Points {
         Hit { index: id, point }
     }
 
-    fn destroy(&mut self, gl: &glow::Context) {
+    fn destroy(&mut self, gl: &dyn Gl) {
         if let Some(g) = self.gpu.take() {
             unsafe {
                 gl.delete_vertex_array(g.vao);
