@@ -11,17 +11,18 @@ page's thread) or JavaScript, and other languages can be plugged in.
 ```
 
 ```python
-# heat_widget.py
+# distance_widget.py
 import numpy as np
-from wgw import rescale
-CONTROLS = {"time": (0.01, 1.0, 0.15)}
+from wgw import Mesh, Points, Slider, Widget
 
-def setup(mesh):                 # once, with the mesh file's arrays as NumPy arrays
-    global EVALS, EVECS
-    EVALS, EVECS = mesh["evals"], mesh["evecs"]
+def widget(spot: Mesh) -> Widget:                  # once, with the figure's mesh file
+    embedding = spot.evecs * np.exp(-spot.evals * 0.3)
 
-def pick(vertex, time):          # on click: heat from the vertex, as colors in [0, 1]
-    return rescale(EVECS @ (np.exp(-EVALS * time) * EVECS[vertex]))
+    def on_pick(vertex, epsilon):                  # on a click, and whenever epsilon moves
+        d2 = np.sum((embedding - embedding[vertex]) ** 2, axis=1)
+        return {"mesh": spot.with_values(np.exp(-d2 / epsilon)), "dot": Points(spot.vertices[vertex])}
+
+    return Widget(controls={"epsilon": Slider(0.001, 1.0, 0.02, log=True)}, on_pick=on_pick, grid=True)
 ```
 
 ## Build and try
@@ -34,57 +35,82 @@ Needs Rust with the `wasm32-unknown-unknown` target, and [wasm-pack](https://git
 python3 -m http.server           # then open http://localhost:8000/examples/
 ```
 
-## The model: a scene of layers, made of named arrays
+## The model: a scene of layers
 
-A scene is a set of named **layers**. Each has a type, named **arrays** (n-dimensional, like NumPy's) and
-**parameters** (numbers, booleans, CSS colors):
+A scene is a set of named **layers**. In Python each is a value of one of four types, made of **arrays** (NumPy)
+and **parameters** (numbers, booleans, CSS colors):
 
-| type      | arrays                                            | parameters                                   |
-|-----------|---------------------------------------------------|----------------------------------------------|
-| `mesh`    | `vertices (n,3)`, `faces (m,3)`, `values (n)`      | `edges`, `flat`, `edge_color`                |
-| `points`  | `vertices (n,3)`, `values (n)`                     | `size` (CSS px)                              |
-| `lines`   | `vertices (n,3)`, `values (n)`, `segments (s,2)`   | `width` (CSS px), `closed`                   |
-| `vectors` | `vertices (n,3)` (origins), `vectors (n,3)`, `values (n)` | `scale`, `width` (fraction of the scene) |
+| type                                     | parameters                                       |
+|------------------------------------------|--------------------------------------------------|
+| `Mesh(vertices, faces, values=None)`     | `edges` (the triangle grid), `flat`, `edge_color` |
+| `Points(vertices, values=None)`          | `size` (CSS px), `lift`                          |
+| `Lines(vertices, values=None, segments=None)` | `width` (CSS px), `closed`                  |
+| `Vectors(origins, vectors, values=None)` | `scale`, `width` (fraction of the scene)         |
 
-All types also take `color` (solid), `colors` (a colormap), `min`/`max` (the range of `values`, default 0 to 1),
-`visible`, and `pickable` (on for meshes and points). Give any array except `faces` and `segments` a leading
-**frames** axis to animate it.
+All take `color` (solid), `colors` (a colormap), `min`/`max` (the range of `values`, default 0 to 1), `visible`
+and `pickable` (on for meshes and points). Give any array except `faces` and `segments` a leading **frames** axis
+to animate it.
+
+Layers are values: `layer.with_values(v)` and `layer.replace(width=3)` return new layers that share everything
+else. A `Mesh` also carries extra arrays (`mesh.evecs`, from its file), geometry (`normals`, `face_normals`,
+`face_areas`, `areas`, `area`, `edges`), `Mesh.load("spot.obj" or "spot.wgw")` and `mesh.save("spot.wgw", **arrays)`.
 
 ## Widgets
 
-A widget defines any of:
+A widget file defines one function, `widget`, from the figure's mesh (or nothing, if the figure has none) to a
+`Widget`: a value saying what the figure starts as, which controls it has, and how it responds to them.
 
 ```python
-CONTROLS = {"frequency": (1, 6, 3), "arrows": True}   # (min, max, start[, step]) is a slider; a bool, a checkbox
-
-def setup(mesh): ...                     # once; mesh is the data-src file's arrays (or None)
-def update(frequency, arrows): ...       # at start, and whenever a control changes
-def pick(vertex, frequency, arrows): ... # on click (or hover, with data-pick="hover"); add a `layer` argument
-                                         # to also be told which layer was picked
+Widget(
+    scene={"sphere": sphere},                     # layers to start with; a mesh file is already the layer "mesh"
+    controls={"frequency": Slider(1, 6, 3),       # passed to the functions below as keyword arguments
+              "epsilon": Slider(0.001, 1, 0.02, log=True),
+              "arrows": Checkbox(True)},
+    on_change=lambda frequency, epsilon, arrows: {...},   # at the start, and whenever a control changes
+    on_pick=lambda vertex, frequency, epsilon, arrows: {...},  # on a click (or hover); add `layer` to learn which
+    grid=True,                                    # meshes' triangle grids: True, False, or Checkbox(...) for readers
+    fps=30, loop=False,                           # how frames play
+)
 ```
 
-Each returns a **patch** to the scene: a dict of layers by name, built with `wgw.mesh`, `wgw.points`,
-`wgw.lines` and `wgw.vectors`. `None` removes a layer, and a dict without `type` changes just what it names.
-Shorthand: a bare array, or `values`/`vertices`/`faces` at the top level, goes to the layer named `mesh`. Add
-`"loop": True` or `"fps": 24` to control animation.
+`on_change` and `on_pick` return a scene: layers by name, each replacing the layer of that name exactly as given;
+`None` removes one, and layers not named stay as they are. Work done once (a spectrum, an embedding) goes in
+`widget` itself, and the closures keep it, so nothing lives in globals.
 
 ```python
-from wgw import icosphere, mesh, vectors, lines, points
-V, F = icosphere(3)
+from wgw import Checkbox, Lines, Mesh, Points, Slider, Vectors, Widget, icosphere, rescale
 
-def update(frequency, arrows):
-    f, grad = ...
-    return {"sphere": mesh(V, F, f), "gradient": vectors(V, grad, scale=0.04) if arrows else None}
+def widget() -> Widget:
+    sphere = Mesh(*icosphere(3))
 
-def pick(vertex, frequency, arrows):
-    return {"picked": points(V[[vertex]], size=14, color="#24837b")}
+    def on_change(frequency, arrows):
+        f, grad = ...
+        return {"sphere": sphere.with_values(rescale(f)),
+                "gradient": Vectors(sphere.vertices, grad, scale=0.04) if arrows else None}
+
+    def on_pick(vertex, frequency, arrows):
+        return {"picked": Points(sphere.vertices[vertex], size=14, color="#24837b")}
+
+    return Widget(controls={"frequency": Slider(1, 6, 3), "arrows": Checkbox(True)},
+                  on_change=on_change, on_pick=on_pick)
 ```
 
-Python widgets can `from wgw import ...` (shapes: `torus`, `icosphere`, `surface`, `grid_faces`; `rescale`) and
-import any package Pyodide ships, which loads on demand. A JavaScript widget is an ES module exporting the same
-names, with controls as one object: `update({frequency, arrows})`, `pick(vertex, controls, layer)`.
+Arrays are sent to the page only when they're new objects, so returning `spot.with_values(...)` on every click
+sends just the values. Treat arrays you've returned as fixed: make new ones rather than changing them in place.
 
-While a widget is busy, a newer call replaces the waiting one, so dragging a slider never builds up a backlog.
+A widget reads its own data, with relative paths from where the widget file is: `Mesh.load("meshes/spot.obj")`,
+`np.load("spectrum.npz")`, `open("notes.txt")`. In the browser, each file is fetched from beside the widget the
+first time it's opened, so the same code runs in the browser and locally. A figure's own mesh is better given as
+`data-src`, though: the core shows it before Python has started.
+
+Python widgets can import anything Pyodide ships (SciPy, ...), which loads on demand, and `wgw`'s shapes:
+`torus`, `icosphere`, `surface`, `grid_faces`, and `rescale`. While a widget is busy, a newer call replaces the
+waiting one, so dragging a slider never builds up a backlog.
+
+A JavaScript widget is an ES module exporting `widget(mesh)`, which returns the same thing as an object:
+`{scene, controls, onChange(controls), onPick(vertex, controls, layer), grid, fps, loop}`, with layers as
+`{type: "mesh", vertices, faces, values, ...params}` (typed arrays) and controls as `[min, max, start, "log"?]`
+or `true`/`false`. See `examples/ripple_widget.js`.
 
 ### Other languages
 
@@ -93,16 +119,20 @@ for anything that can return patches, such as Rust or C++ compiled to WebAssembl
 
 ```js
 WGW.runners.wasm = {
-  load(key, url, mesh) { /* -> Promise<{controls, functions: ["update", "pick"], result: patch}> */ },
+  load(key, url, mesh) { /* -> Promise<{controls, functions: ["change", "pick"], grid, fps, loop, result: patch}> */ },
   call(key, name, index, layer, controls) { /* -> Promise<patch> */ },
 };
 ```
 
 ## Mesh files
 
-`wgw.save("spot.wgw", vertices, faces, **arrays)` writes a mesh, plus any arrays its widget needs (a spectrum,
-say; cast to float16 to halve the download). The format is a small JSON header and then the raw arrays, 8-byte
-aligned, so the page reads them without parsing. JSON files (`{"vertices": [...], "faces": [...]}`) work too.
+A figure's mesh (`data-src`) is fetched and parsed by the core, which shows it at once, before any widget has
+started, and then hands it to the widget as `widget(mesh)`. The core reads Wavefront `.obj` (triangles and
+polygons; texture coordinates and normals are ignored, so vertices are the file's `v` lines in order) and `.wgw`.
+
+`.wgw` holds a mesh plus any arrays its widget needs, which the widget gets as attributes (`spot.evecs`): write one
+with `Mesh(vertices, faces).save("spot.wgw", evecs=...)` (cast to float16 to halve the download). It's a small
+JSON header and then the raw arrays, 8-byte aligned.
 
 ## Options
 
@@ -111,12 +141,11 @@ aligned, so the page reads them without parsing. JSON files (`{"vertices": [...]
 | `data-up`     | `z`       | the axis that points up                           |
 | `data-view`   | `-60,20`  | starting turn and tilt, degrees                   |
 | `data-pick`   | `click`   | `click`, `hover` or `none`                        |
-| `data-edges`  | off       | triangle edges on the `mesh` layer                |
 | `data-flat`   | off       | flat shading on the `mesh` layer                  |
-| `data-fps`    | `30`      | animation frame rate                              |
 
 Styling uses CSS custom properties on the element: `--wgw-colors` (the colors `values` run through),
-`--wgw-accent` (points, curves and arrows without values), `--wgw-edge`, `--wgw-height`. A theme change (a
+`--wgw-accent` (points, curves and arrows without values), `--wgw-edge`, `--wgw-height`, and `--wgw-control`
+(sliders and checkboxes; the text color by default). A theme change (a
 `data-theme` or `class` on `<html>`, or the system setting) recolors every viewer.
 
 Drag to turn, pinch or ctrl/cmd+scroll to zoom, double-click to reset; plain scrolling scrolls the page.
@@ -129,7 +158,7 @@ From JavaScript: `WGW.mount(el, options)` returns a viewer with `on("pick", fn)`
 src/            the Rust core: lib.rs (the Viewer the page talks to), layer.rs (the layer model and the
                 Primitive trait), one module per layer type (mesh, points, lines, vectors), camera, shaders
 js/             the page side: wgw.js (viewers, input, widgets), runners.js, python-worker.js, patch.js, io.js
-python/wgw.py   file format, layer constructors and shapes, for offline scripts and widgets alike
+python/wgw.py   Widget, the layer types, the file format and shapes, for offline scripts and widgets alike
 examples/
 ```
 

@@ -1,5 +1,5 @@
 //! Triangle meshes: `vertices (n, 3)`, `faces (m, 3)`, optional `values (n)`; any but faces may have frames.
-//! Parameters: `edges` (draw triangle edges), `flat` (flat shading), `min`/`max` (the values' range),
+//! Parameters: `edges` (draw triangle edges; by default the viewer's grid setting), `flat` (flat shading), `min`/`max` (the values' range),
 //! `color`/`colors`, `edge_color`, `pickable` (on by default).
 
 use glam::Vec3;
@@ -73,7 +73,7 @@ impl Primitive for Mesh {
             upload(gl, glow::ELEMENT_ARRAY_BUFFER, g.faces, faces);
             gl::colormap(gl, Some(g.colormap), &data.stops(style));
             self.count = faces.len() as i32;
-            if data.flag("edges", false) {
+            if data.flag("edges", style.grid) {
                 let edges = unique_edges(faces);
                 upload(gl, glow::ELEMENT_ARRAY_BUFFER, g.edges, &edges);
                 self.edge_count = edges.len() as i32;
@@ -92,7 +92,7 @@ impl Primitive for Mesh {
     fn draw(&self, gl: &glow::Context, shaders: &Shaders, view: &View, data: &LayerData, style: &Style) {
         let Some(g) = &self.gpu else { return };
         let p = &shaders.mesh;
-        let edges = data.flag("edges", false) && self.edge_count > 0;
+        let edges = data.flag("edges", style.grid) && self.edge_count > 0;
         p.bind(gl);
         p.mat4(gl, "uModelView", &view.model_view);
         p.mat4(gl, "uProj", &view.proj);

@@ -1,34 +1,24 @@
-// Mesh files as named arrays, {name: {data, shape, dtype}}: .wgw (written by python/wgw.py) or JSON.
+// Mesh files: fetched here, parsed by the core (src/io.rs), which reads .obj and .wgw.
+
+import { parse_mesh } from "./core/wgw_core.js";
 
 const TYPES = { f4: Float32Array, f8: Float64Array, f2: Uint16Array, u4: Uint32Array, i4: Int32Array, u2: Uint16Array, u1: Uint8Array };
 
+// A parsed mesh file (the core's MeshFile); free() it when done.
 export async function loadMesh(url) {
   const res = await fetch(url);
   if (!res.ok) throw new Error(`${url}: HTTP ${res.status}`);
-  return /\.json($|\?)/.test(url) ? fromJSON(await res.json()) : fromWGW(await res.arrayBuffer());
+  const format = url.split(/[?#]/)[0].split(".").pop().toLowerCase();
+  return parse_mesh(new Uint8Array(await res.arrayBuffer()), format);
 }
 
-// float16 arrays stay raw bits (a Uint16Array): they are only handed on to widgets.
-export function fromWGW(buffer) {
-  if (new TextDecoder().decode(new Uint8Array(buffer, 0, 4)) !== "WGW1") throw new Error("not a .wgw file");
-  const length = new DataView(buffer).getUint32(4, true), start = 8 + length;
-  const header = JSON.parse(new TextDecoder().decode(new Uint8Array(buffer, 8, length))).arrays;
+// A parsed file's arrays, {name: {data, shape, dtype}}, for a widget. float16 arrays stay raw bits (a Uint16Array):
+// they are only handed on to widgets.
+export function meshArrays(file) {
   const arrays = {};
-  for (const [name, a] of Object.entries(header)) {
-    const size = a.shape.reduce((x, y) => x * y, 1);
-    arrays[name] = { data: new TYPES[a.dtype](buffer, start + a.offset, size), shape: a.shape, dtype: a.dtype };
-  }
-  return arrays;
-}
-
-export function fromJSON(json) {
-  const arrays = {};
-  for (const [name, value] of Object.entries(json)) {
-    if (!Array.isArray(value)) continue;
-    const shape = [];
-    for (let level = value; Array.isArray(level); level = level[0]) shape.push(level.length);
-    const faces = name === "faces";
-    arrays[name] = { data: (faces ? Uint32Array : Float32Array).from(value.flat(Infinity)), shape, dtype: faces ? "u4" : "f4" };
+  for (const name of file.names()) {
+    const bytes = file.bytes(name), dtype = file.dtype(name), Type = TYPES[dtype];
+    arrays[name] = { data: new Type(bytes.buffer, bytes.byteOffset, bytes.byteLength / Type.BYTES_PER_ELEMENT), shape: Array.from(file.shape(name)), dtype };
   }
   return arrays;
 }

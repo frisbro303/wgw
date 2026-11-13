@@ -121,11 +121,13 @@ impl LayerData {
     }
 }
 
-/// The page's colors, read from CSS.
+/// The page's colors, read from CSS, and the viewer-wide settings.
 pub struct Style {
     pub colormap: Vec<Rgba>,
     pub accent: Rgba,
     pub edge: Rgba,
+    /// Draw meshes' triangle grids; a layer's own `edges` parameter overrides it.
+    pub grid: bool,
 }
 
 /// What a primitive needs to draw: matrices, the viewport in device pixels, and the scene's size.

@@ -1,9 +1,6 @@
 """Every layer kind at once: a sphere colored by a function, its gradient as arrows, a level curve, and the clicked point."""
 import numpy as np
-from wgw import icosphere, lines, mesh, points, rescale, vectors
-
-CONTROLS = {"frequency": (1, 6, 3), "arrows": True}
-VERTICES, FACES = icosphere(3)
+from wgw import Checkbox, Lines, Mesh, Points, Slider, Vectors, Widget, icosphere, rescale
 
 
 def field(p, k):
@@ -14,17 +11,27 @@ def field(p, k):
     return f, grad
 
 
-def update(frequency, arrows):
-    f, grad = field(VERTICES, frequency)
-    tangent = grad - np.sum(grad * VERTICES, axis=1, keepdims=True) * VERTICES  # the gradient on the sphere
+def widget() -> Widget:
+    sphere = Mesh(*icosphere(3))
+    V = sphere.vertices
     t = np.linspace(0, 2 * np.pi, 200, endpoint=False)
-    circle = 1.003 * np.stack([np.cos(t) * np.sqrt(0.75), np.sin(t) * np.sqrt(0.75), np.full_like(t, 0.5)], axis=1)
-    return {
-        "sphere": mesh(VERTICES, FACES, rescale(f)),
-        "gradient": vectors(VERTICES, tangent, scale=0.04, width=0.008, color="#205ea6") if arrows else None,
-        "latitude": lines(circle, closed=True, width=2.5, color="#100f0f"),
-    }
+    latitude = Lines(1.003 * np.stack([np.cos(t) * np.sqrt(0.75), np.sin(t) * np.sqrt(0.75), np.full_like(t, 0.5)], 1),
+                     closed=True, width=2.5, color="#100f0f")
 
+    def on_change(frequency, arrows):
+        f, grad = field(V, frequency)
+        tangent = grad - np.sum(grad * V, axis=1, keepdims=True) * V  # the gradient along the sphere
+        return {
+            "sphere": sphere.with_values(rescale(f)),
+            "gradient": Vectors(V, tangent, scale=0.04, width=0.008, color="#205ea6") if arrows else None,
+            "latitude": latitude,
+        }
 
-def pick(vertex, frequency, arrows):
-    return {"picked": points(VERTICES[[vertex]] * 1.01, size=14, color="#24837b")}
+    def on_pick(vertex, frequency, arrows):
+        return {"picked": Points(V[vertex] * 1.01, size=14, color="#24837b")}
+
+    return Widget(
+        controls={"frequency": Slider(1, 6, 3), "arrows": Checkbox(True)},
+        on_change=on_change,
+        on_pick=on_pick,
+    )

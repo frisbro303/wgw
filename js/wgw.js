@@ -2,13 +2,13 @@
 // driven by widgets in Python, JavaScript, or anything a runner is registered for (see runners.js).
 //
 // Any <div class="wgw"> becomes a viewer. Its data attributes:
-//   data-src="mesh.wgw"        a mesh file (.wgw from python/wgw.py, or JSON), shown as the layer "mesh"
+//   data-src="spot.obj"        a mesh file, .obj or .wgw (from python/wgw.py), parsed by the core and shown as
+//                              the layer "mesh"; a widget gets it as widget(mesh)
 //   data-widget="x_widget.py"  a widget that builds, colors or reshapes the scene: .py or .js
 //   data-up="z"                the axis that points up: x, y or z
 //   data-view="-60,20"         the starting camera: turn and tilt, in degrees
 //   data-pick="click"          when the widget's pick runs: click, hover or none
-//   data-fps="30"              the rate a widget's frames play at
-//   data-edges, data-flat      for the "mesh" layer: draw triangle edges; flat shading
+//   data-flat                  flat shading for the "mesh" layer
 // CSS custom properties style it: --wgw-colors (the colors values run through), --wgw-accent (points,
 // curves and arrows without values), --wgw-edge, --wgw-height.
 //
@@ -16,7 +16,7 @@
 // viewer.reset(); WGW.runners to add a language.
 
 import init, { Viewer as Core } from "./core/wgw_core.js";
-import { loadMesh } from "./io.js";
+import { loadMesh, meshArrays } from "./io.js";
 import { animates, controlInputs, toPatch } from "./patch.js";
 import { runnerFor, runners } from "./runners.js";
 import { readStyle, rgbaList } from "./style.js";
@@ -32,14 +32,32 @@ const STYLE = `
 .wgw-status{position:absolute;left:8px;top:8px;font:12px ui-monospace,monospace;opacity:.6;pointer-events:none;white-space:pre-line}
 .wgw-controls{display:flex;flex-wrap:wrap;justify-content:center;gap:6px 18px;font:13px ui-monospace,monospace}
 .wgw-controls:empty{display:none}
-.wgw-controls label{display:inline-flex;align-items:center;gap:6px}
-.wgw-controls output{min-width:5ch}`;
+.wgw-controls label{display:inline-flex;align-items:center;gap:8px;cursor:pointer;user-select:none}
+.wgw-controls output{min-width:5ch;font-variant-numeric:tabular-nums}
+.wgw-controls input{--c:var(--wgw-control,currentColor);--faint:color-mix(in srgb,var(--c) 22%,transparent);margin:0;cursor:pointer}
+.wgw-controls input:focus-visible{outline:none}
+.wgw-controls input[type=range]{-webkit-appearance:none;appearance:none;width:140px;height:18px;background:none}
+.wgw-controls input[type=range]::-webkit-slider-runnable-track{height:2px;border-radius:1px;background:linear-gradient(to right,var(--c) var(--fill,50%),var(--faint) var(--fill,50%))}
+.wgw-controls input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:12px;height:12px;margin-top:-5px;border:0;border-radius:50%;background:var(--c);transition:transform .12s}
+.wgw-controls input[type=range]::-moz-range-track{height:2px;border-radius:1px;background:var(--faint)}
+.wgw-controls input[type=range]::-moz-range-progress{height:2px;border-radius:1px;background:var(--c)}
+.wgw-controls input[type=range]::-moz-range-thumb{width:12px;height:12px;border:0;border-radius:50%;background:var(--c);transition:transform .12s}
+.wgw-controls input[type=range]:hover::-webkit-slider-thumb,.wgw-controls input[type=range]:active::-webkit-slider-thumb{transform:scale(1.25)}
+.wgw-controls input[type=range]:hover::-moz-range-thumb,.wgw-controls input[type=range]:active::-moz-range-thumb{transform:scale(1.25)}
+.wgw-controls input[type=range]:focus-visible::-webkit-slider-thumb{box-shadow:0 0 0 4px var(--faint)}
+.wgw-controls input[type=range]:focus-visible::-moz-range-thumb{box-shadow:0 0 0 4px var(--faint)}
+.wgw-controls input[type=checkbox]{-webkit-appearance:none;appearance:none;width:12px;height:12px;border:1.5px solid var(--c);border-radius:3px;display:grid;place-content:center}
+.wgw-controls input[type=checkbox]::after{content:"";width:6px;height:6px;border-radius:1px;background:var(--c);transform:scale(0);transition:transform .12s}
+.wgw-controls input[type=checkbox]:checked::after{transform:scale(1)}
+.wgw-controls input[type=checkbox]:focus-visible{box-shadow:0 0 0 4px var(--faint)}`;
 
 const viewers = [];
 let widgetCount = 0;
 
 const flag = (v) => v !== undefined && v !== "false";
 const format = (x) => String(+(+x).toPrecision(3));
+// How far along a slider is, for the filled part of its track.
+const fill = (input) => input.style.setProperty("--fill", `${((input.value - input.min) / (input.max - input.min)) * 100}%`);
 
 export class Viewer {
   constructor(el, options = {}) {
@@ -52,7 +70,6 @@ export class Viewer {
       view: options.view || (d.view ? d.view.split(",").map(Number) : [-60, 20]),
       pick: options.pick ?? d.pick ?? "click",
       fps: +(options.fps ?? d.fps ?? 30),
-      edges: options.edges ?? flag(d.edges),
       flat: options.flat ?? flag(d.flat),
     };
     el.wgw = this;
@@ -98,12 +115,18 @@ export class Viewer {
   async start() {
     const o = this.options;
     try {
-      if (o.src) {
+      if (o.src) {  // parsed and shown by the core right away, then handed to the widget
         this.status("loading mesh…");
-        this.arrays = await loadMesh(o.src);
-        const { vertices, faces } = this.arrays;
-        this.apply({ layers: { mesh: { type: "mesh", arrays: { vertices, faces } } } }, false);
+        const file = await loadMesh(o.src);
+        try {
+          this.core.set_mesh_file("mesh", file);
+          if (o.flat) this.core.set_number("mesh", "flat", 1);
+          if (o.widget) this.arrays = meshArrays(file);
+        } finally {
+          file.free();
+        }
         this.status("");
+        this.requestRender();
       }
       if (o.widget) await this.startWidget();
     } catch (err) {
@@ -140,13 +163,10 @@ export class Viewer {
     for (const [name, layer] of Object.entries(patch.layers || {})) {
       if (layer === null) { core.remove_layer(name); continue; }
       const arrays = layer.arrays || {};
-      const inferred = arrays.faces ? "mesh" : arrays.vectors ? "vectors" : arrays.segments ? "lines" : "";
-      const created = !core.has_layer(name);
-      core.set_layer(name, layer.type || (created ? inferred : ""));
-      if (created && name === "mesh") {  // data-edges and data-flat, for the mesh from a file or a widget
-        core.set_number(name, "edges", +this.options.edges);
-        core.set_number(name, "flat", +this.options.flat);
-      }
+      core.set_layer(name, layer.type);
+      core.clear_params(name);  // the layer is exactly what's given
+      if (name === "mesh" && this.options.flat) core.set_number(name, "flat", 1);  // data-flat, the figure's own
+      for (const key of layer.remove || []) core.remove_array(name, key);
       for (const [key, a] of Object.entries(arrays)) {
         const shape = Uint32Array.from(a.shape);
         if (a.data instanceof Uint32Array) core.set_u32(name, key, a.data, shape);
@@ -157,7 +177,7 @@ export class Viewer {
         else if (typeof value === "string" || Array.isArray(value)) core.set_colors(name, key, rgbaList([].concat(value)));
       }
     }
-    if (animates(patch)) core.play(performance.now(), patch.fps || this.options.fps, !!patch.loop, animate);
+    if (animates(patch)) core.play(performance.now(), this.fps || this.options.fps, !!this.loop, animate);
     this.requestRender();
   }
 
@@ -246,30 +266,40 @@ export class Viewer {
     const info = await this.runner.load(this.key, url, this.arrays || null);
     this.status("");
     this.functions = info.functions;
+    this.fps = info.fps;
+    this.loop = info.loop;
+    this.core.set_grid(!!info.grid);
     this.buildControls(controlInputs(info.controls));
     this.apply(info.result, true);
     this.widgetReady = true;
-    if (this.functions.includes("update")) this.call("update", false);
+    if (this.functions.includes("change")) this.call("change", false);
+    this.requestRender();
     if (this.lastPick && this.functions.includes("pick")) this.call("pick", true);
   }
 
   buildControls(spec) {
     for (const [name, c] of Object.entries(spec)) {
       const label = document.createElement("label"), input = document.createElement("input"), output = document.createElement("output");
-      this.controls[name] = c.value;
+      const actual = (x) => (c.log ? 10 ** x : x);  // what the widget gets
+      // "grid" is the viewer's: a checkbox for the triangle grid, not passed to the widget.
+      const viewer = name === "grid" && c.type === "checkbox";
+      if (viewer) this.core.set_grid(c.value);
+      else this.controls[name] = actual(c.value);
       if (c.type === "checkbox") {
         Object.assign(input, { type: "checkbox", checked: c.value });
         label.append(input, name);
       } else {
         Object.assign(input, { type: "range", min: c.min, max: c.max, step: c.step, value: c.value });
-        output.textContent = format(c.value);
+        output.textContent = format(actual(c.value));
+        fill(input);
         label.append(name, input, output);
       }
       input.addEventListener("input", () => {
-        const value = input.type === "checkbox" ? input.checked : +input.value;
+        const value = input.type === "checkbox" ? input.checked : actual(+input.value);
+        if (viewer) { this.core.set_grid(value); this.requestRender(); return; }
         this.controls[name] = value;
-        if (input.type !== "checkbox") output.textContent = format(value);
-        if (this.functions.includes("update")) this.call("update", false);
+        if (input.type !== "checkbox") { output.textContent = format(value); fill(input); }
+        if (this.functions.includes("change")) this.call("change", false);
         if (this.functions.includes("pick") && this.lastPick) this.call("pick", false);
       });
       this.controlsEl.appendChild(label);

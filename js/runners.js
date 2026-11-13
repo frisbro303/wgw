@@ -2,11 +2,12 @@
 //   preload()                                 optional: start up early (Python takes seconds)
 //   load(key, url, mesh) -> Promise<{controls, functions, result}>
 //   call(key, name, index, layer, controls) -> Promise<patch>
-// where mesh is the mesh file's arrays ({name: {data, shape, dtype}}) or null, controls the widget's CONTROLS as
-// written, functions which of "update" and "pick" it has, and results patches (see patch.js).
+// where mesh is the mesh file's arrays ({name: {data, shape, dtype}}) or null; load gives the widget's controls
+// ({name: [min, max, start, step? "log"?] or true/false}), which of "change" and "pick" it has, its grid, fps and
+// loop; and results are patches (see patch.js).
 // Add a language with WGW.runners.ext = {...}: Rust or C++ compiled to WebAssembly, a server, ...
 
-import { toPatch } from "./patch.js";
+import { markSent, toPatch } from "./patch.js";
 
 const PYODIDE = "https://cdn.jsdelivr.net/pyodide/v0.26.4/full/";
 const HERE = new URL(".", import.meta.url).href;
@@ -55,31 +56,40 @@ const py = {
         arrays[name] = { data: a.data.slice(), shape: a.shape, dtype: a.dtype };
       }
     }
-    return request({ type: "load", key, source, arrays });
+    return request({ type: "load", key, url: new URL(url, location.href).href, source, arrays });
   },
   call(key, name, index, layer, controls) {
     return request({ type: "call", key, name, index, layer, controls });
   },
 };
 
-// ---- JavaScript: an ES module exporting CONTROLS, setup(mesh), update(controls), pick(index, controls, layer)
+// ---- JavaScript: an ES module exporting widget(mesh), which returns
+//   {scene, controls, onChange(controls), onPick(index, controls, layer), grid, fps, loop}
+// like Python's Widget; grid is true, false, or {toggle: true | false} for a checkbox.
 
-const modules = new Map();
+const widgets = new Map();
 
 const js = {
   async load(key, url, mesh) {
     const module = await import(new URL(url, location.href).href);
-    modules.set(key, module);
-    const result = module.setup ? await module.setup(mesh) : null;
+    const make = module.widget || module.default;
+    if (typeof make !== "function") throw new Error(`${url}: export function widget(mesh)`);
+    if (mesh) for (const field of ["vertices", "faces"]) markSent(key, "mesh", field, mesh[field]);  // shown already
+    const w = await make(mesh);
+    widgets.set(key, w);
+    const toggle = w.grid && typeof w.grid === "object";
     return {
-      controls: module.CONTROLS || {},
-      functions: ["update", "pick"].filter((f) => typeof module[f] === "function"),
-      result: toPatch(result),
+      controls: { ...(w.controls || {}), ...(toggle ? { grid: !!w.grid.toggle } : {}) },
+      functions: [["change", w.onChange], ["pick", w.onPick]].filter(([, f]) => typeof f === "function").map(([n]) => n),
+      grid: toggle ? !!w.grid.toggle : !!w.grid,
+      fps: w.fps ?? 30,
+      loop: !!w.loop,
+      result: toPatch(key, w.scene),
     };
   },
   async call(key, name, index, layer, controls) {
-    const module = modules.get(key);
-    return toPatch(await (name === "update" ? module.update(controls) : module.pick(index, controls, layer)));
+    const w = widgets.get(key);
+    return toPatch(key, await (name === "change" ? w.onChange(controls) : w.onPick(index, controls, layer)));
   },
 };
 

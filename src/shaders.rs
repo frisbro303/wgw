@@ -63,10 +63,11 @@ void main() { color = uColor; }"#;
 
 const POINTS_VS: &str = r#"
 layout(location=0) in vec3 aPos; layout(location=2) in float aValue;
-uniform mat4 uModelView, uProj; uniform float uSize;
+uniform mat4 uModelView, uProj; uniform float uSize, uLift;
 out vec3 vPos; out float vValue; flat out uint vId;
 void main() {
   vec4 p = uModelView * vec4(aPos, 1.0);
+  p.xyz += normalize(-p.xyz) * uLift;  // toward the camera, so a point on a surface isn't half buried in it
   vPos = p.xyz; vValue = aValue; vId = uint(gl_VertexID);
   gl_Position = uProj * p;
   gl_PointSize = uSize;

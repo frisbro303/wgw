@@ -1,7 +1,17 @@
-"""Python for wgw: the .wgw file format, layers for widgets to return, and shapes to build them from.
+"""Python for wgw: widgets (Widget, Slider, Checkbox), layers (Mesh, Points, Lines, Vectors), the .wgw file
+format, and shapes.
+
+A widget is a function from the figure's mesh (or nothing) to a Widget:
+
+    def widget(spot: Mesh) -> Widget:
+        embedding = ...                                  # work done once, kept by the closures below
+        def on_pick(vertex, epsilon):                    # controls arrive as keyword arguments
+            return {"mesh": spot.with_values(...), "dot": Points(spot.vertices[vertex])}
+        return Widget(controls={"epsilon": Slider(0.001, 1, 0.02, log=True)}, on_pick=on_pick, grid=True)
+
 
 Runs both offline (to write .wgw files for a page) and in the browser, where wgw puts this file on the
-widget's import path, so a widget can `from wgw import torus, vectors`. Needs only NumPy.
+widget's import path, so a widget can `from wgw import Mesh, Points`. Needs only NumPy.
 
 The .wgw format is little-endian: b"WGW1", a uint32 header length, a JSON header
 {"arrays": {name: {"dtype", "shape", "offset"}}}, then each array's raw bytes at its offset from the
@@ -9,6 +19,8 @@ end of the header, which is padded so every array starts on an 8-byte boundary.
 """
 import json
 import struct
+from dataclasses import dataclass, field
+from typing import Callable, Optional, Union
 
 import numpy as np
 
@@ -104,30 +116,230 @@ def rescale(values, lo=None, hi=None):
     return np.clip((values - lo) / (hi - lo or 1), 0, 1)
 
 
-# Layers. A widget returns a dict of these by name, to add or replace layers of the scene; None removes one, and a
-# dict without "type" changes only what it names (just "values", say). Bare arrays at the top level ("values",
-# "vertices", "faces") go to the layer named "mesh". Parameters (numbers, booleans, CSS colors) are listed in the
-# Rust modules for each kind: src/mesh.rs, points.rs, lines.rs, vectors.rs.
-
-def mesh(vertices, faces, values=None, **params):
-    """A triangle mesh: vertices (n, 3), faces (m, 3), values (n) in [min, max] (default [0, 1]) for color."""
-    return _layer("mesh", vertices=vertices, faces=faces, values=values, **params)
+# ---- Layers: what a scene is made of, and what widgets return.
+#
+# A widget returns a dict of layers by name, to add or replace them; None removes one. A layer's arrays are sent to
+# the page only when they're new objects: one returned again (say the vertices of SPOT.with_values(...)) is not sent
+# again. So treat arrays you've returned as fixed: make a new array rather than changing one in place.
 
 
-def points(vertices, values=None, **params):
-    """A point cloud, drawn as round dots `size` CSS pixels across."""
-    return _layer("points", vertices=vertices, values=values, **params)
+class Layer:
+    """A layer of the scene: named arrays (per vertex, or per frame and vertex to animate) and parameters."""
+
+    kind = None
+    fields = ()  # the array fields, in constructor order
+
+    def __init__(self, **params):
+        self.params = params  # numbers, booleans and CSS colors; see the README for each kind's
+
+    def replace(self, **changes):
+        """A copy with some arrays or parameters changed; the rest are shared, not copied."""
+        new = object.__new__(type(self))
+        new.__dict__.update(self.__dict__)
+        new.params = dict(self.params)
+        for key, value in changes.items():
+            if key in self.fields:
+                setattr(new, key, value)
+            else:
+                new.params[key] = value
+        return new
+
+    def with_values(self, values, **params):
+        """A copy colored by new per-vertex values, sharing everything else."""
+        return self.replace(values=values, **params)
+
+    def _wgw_layer(self):
+        """The layer as wgw sends it: its kind, arrays and parameters."""
+        out = {"type": self.kind, **self.params}
+        for name in self.fields:
+            value = getattr(self, name)
+            if value is not None:
+                out["vertices" if name == "origins" else name] = value
+        return out
+
+    def __repr__(self):
+        arrays = ", ".join(f"{f}={getattr(self, f).shape}" for f in self.fields if getattr(self, f) is not None)
+        return f"{type(self).__name__}({arrays}{''.join(f', {k}={v!r}' for k, v in self.params.items())})"
 
 
-def lines(vertices, values=None, segments=None, **params):
-    """A curve through the vertices in order (closed=True joins the ends), or the segments (s, 2) between them."""
-    return _layer("lines", vertices=vertices, values=values, segments=segments, **params)
+class Mesh(Layer):
+    """A triangle mesh: vertices (n, 3), faces (m, 3), and values (n) for color, in [min, max] (default [0, 1]).
+
+    Extra arrays (from a .wgw file, or given as `data`) are attributes: mesh.evecs, or mesh["evecs"]. Parameters:
+    edges, flat, color, colors, min, max, edge_color, pickable, visible.
+    """
+
+    kind = "mesh"
+    fields = ("vertices", "faces", "values")
+
+    def __init__(self, vertices, faces, values=None, data=None, **params):
+        super().__init__(**params)
+        self.vertices = np.asarray(vertices, dtype=float)
+        self.faces = np.asarray(faces, dtype=np.int64)
+        self.values = None if values is None else np.asarray(values, dtype=float)
+        self.data = dict(data or {})
+
+    def __getattr__(self, name):
+        data = self.__dict__.get("data", {})
+        if name in data:
+            return data[name]
+        raise AttributeError(f"Mesh has no {name!r}; its extra arrays are {sorted(data) or 'none'}")
+
+    def __getitem__(self, name):
+        return getattr(self, name)
+
+    @classmethod
+    def load(cls, path):
+        """A mesh from a .wgw file (with its extra arrays) or a Wavefront .obj (polygons split into triangles)."""
+        path = str(path)
+        if path.endswith(".obj"):
+            vertices, faces = [], []
+            for line in open(path):
+                parts = line.split()
+                if parts[:1] == ["v"]:
+                    vertices.append([float(x) for x in parts[1:4]])
+                elif parts[:1] == ["f"]:
+                    corners = [int(p.split("/")[0]) for p in parts[1:]]
+                    corners = [c - 1 if c > 0 else len(vertices) + c for c in corners]  # 1-based, or negative
+                    faces += [[corners[0], corners[k], corners[k + 1]] for k in range(1, len(corners) - 1)]
+            return cls(vertices, faces)
+        arrays = dict(load(path))
+        return cls(arrays.pop("vertices"), arrays.pop("faces"), data=arrays)
+
+    def save(self, path, **arrays):
+        """Write the mesh, its extra arrays and these ones to a .wgw file."""
+        save(path, self.vertices, self.faces, **{**self.data, **arrays})
+
+    @property
+    def edges(self):
+        """Each edge once, as (e, 2) vertex pairs, the smaller index first."""
+        pairs = np.sort(self.faces[:, [0, 1, 1, 2, 2, 0]].reshape(-1, 2), axis=1)
+        return np.unique(pairs, axis=0)
+
+    @property
+    def face_normals(self):
+        """Unit normals (m, 3), by the faces' winding."""
+        n = self._cross()
+        return n / np.linalg.norm(n, axis=1, keepdims=True)
+
+    @property
+    def face_areas(self):
+        return 0.5 * np.linalg.norm(self._cross(), axis=1)
+
+    @property
+    def normals(self):
+        """Area-weighted unit vertex normals (n, 3)."""
+        n = np.zeros_like(self.vertices)
+        cross = self._cross()
+        for k in range(3):
+            np.add.at(n, self.faces[:, k], cross)
+        return n / np.maximum(np.linalg.norm(n, axis=1, keepdims=True), 1e-300)
+
+    @property
+    def areas(self):
+        """Each vertex's share of the area (n): a third of each face around it (the lumped mass matrix)."""
+        a = np.zeros(len(self.vertices))
+        for k in range(3):
+            np.add.at(a, self.faces[:, k], self.face_areas / 3)
+        return a
+
+    @property
+    def area(self):
+        return float(self.face_areas.sum())
+
+    def _cross(self):
+        v = self.vertices[self.faces]
+        return np.cross(v[:, 1] - v[:, 0], v[:, 2] - v[:, 0])
 
 
-def vectors(origins, vectors, values=None, **params):
-    """Arrows from origins (n, 3) along vectors (n, 3), scaled by `scale`."""
-    return _layer("vectors", vertices=origins, vectors=vectors, values=values, **params)
+class Points(Layer):
+    """A point cloud, vertices (n, 3), drawn as round dots `size` CSS pixels across; values (n) for color."""
+
+    kind = "points"
+    fields = ("vertices", "values")
+
+    def __init__(self, vertices, values=None, **params):
+        super().__init__(**params)
+        self.vertices = np.atleast_2d(np.asarray(vertices, dtype=float))
+        self.values = None if values is None else np.asarray(values, dtype=float)
 
 
-def _layer(kind, **fields):
-    return {"type": kind, **{k: v for k, v in fields.items() if v is not None}}
+class Lines(Layer):
+    """A curve through vertices (n, 3) in order (closed=True joins the ends), or the segments (s, 2) between them;
+    `width` CSS pixels wide; values (n) for color."""
+
+    kind = "lines"
+    fields = ("vertices", "segments", "values")
+
+    def __init__(self, vertices, values=None, segments=None, **params):
+        super().__init__(**params)
+        self.vertices = np.asarray(vertices, dtype=float)
+        self.segments = None if segments is None else np.asarray(segments, dtype=np.int64)
+        self.values = None if values is None else np.asarray(values, dtype=float)
+
+
+class Vectors(Layer):
+    """Arrows from origins (n, 3) along vectors (n, 3), scaled by `scale`; values (n) for color."""
+
+    kind = "vectors"
+    fields = ("origins", "vectors", "values")
+
+    def __init__(self, origins, vectors, values=None, **params):
+        super().__init__(**params)
+        self.origins = np.asarray(origins, dtype=float)
+        self.vectors = np.asarray(vectors, dtype=float)
+        self.values = None if values is None else np.asarray(values, dtype=float)
+
+
+# ---- Widgets
+
+
+@dataclass(frozen=True)
+class Slider:
+    """A slider from min to max starting at value; log=True moves it evenly in powers of ten."""
+
+    min: float
+    max: float
+    value: float
+    step: Optional[float] = None
+    log: bool = False
+
+    def _spec(self):
+        return [self.min, self.max, self.value] + ([self.step] if self.step else []) + (["log"] if self.log else [])
+
+
+@dataclass(frozen=True)
+class Checkbox:
+    value: bool = False
+
+    def _spec(self):
+        return bool(self.value)
+
+
+Scene = dict  # layers by name: {"mesh": Mesh(...), "dot": Points(...), "gone": None}
+
+
+@dataclass(frozen=True)
+class Widget:
+    """What a widget is: its starting scene, its controls, and functions from controls (and a picked vertex) to
+    changes of the scene.
+
+    scene      layers to start with, by name; the figure's mesh file, if any, is already shown as "mesh"
+    controls   Sliders and Checkboxes by name; their values are passed to on_change and on_pick as keyword arguments
+    on_change  (**controls) -> Scene, run at the start and whenever a control changes
+    on_pick    (vertex, **controls) -> Scene, run when a vertex is clicked (or hovered, with pick: "hover"); add a
+               `layer` argument to be told which layer it was in
+    grid       draw meshes' triangle grids: True, False, or a Checkbox for readers to toggle it
+    fps, loop  how a scene's frames play (arrays with a leading frames axis animate)
+
+    A returned Scene replaces the layers it names, each exactly as given; layers it doesn't name are kept, and
+    None removes one. Returning a single layer means {"mesh": layer}.
+    """
+
+    scene: Scene = field(default_factory=dict)
+    controls: dict = field(default_factory=dict)
+    on_change: Optional[Callable[..., Scene]] = None
+    on_pick: Optional[Callable[..., Scene]] = None
+    grid: Union[bool, Checkbox] = False
+    fps: float = 30
+    loop: bool = False

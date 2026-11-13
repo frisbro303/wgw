@@ -1,5 +1,6 @@
 //! Point clouds: `vertices (n, 3)`, optional `values (n)`, either with frames. Drawn as round, shaded sprites.
-//! Parameters: `size` (CSS pixels, default 6), `min`/`max`, `color`/`colors`, `pickable` (on by default).
+//! Parameters: `size` (CSS pixels, default 6), `lift` (toward the camera, as a fraction of the scene's size,
+//! default 0.02, so points on a surface sit on top of it), `min`/`max`, `color`/`colors`, `pickable` (on by default).
 
 use glam::Vec3;
 use glow::HasContext;
@@ -56,6 +57,7 @@ impl Primitive for Points {
         p.mat4(gl, "uModelView", &view.model_view);
         p.mat4(gl, "uProj", &view.proj);
         p.f1(gl, "uSize", data.number("size", 6.0) as f32 * view.dpr);
+        p.f1(gl, "uLift", data.number("lift", 0.02) as f32);
         let range = data.range();
         p.f2(gl, "uRange", range.x, range.y);
         gl::bind_texture(gl, p, "uMap", g.colormap);
@@ -73,6 +75,7 @@ impl Primitive for Points {
         p.mat4(gl, "uModelView", &view.model_view);
         p.mat4(gl, "uProj", &view.proj);
         p.f1(gl, "uSize", data.number("size", 6.0) as f32 * view.dpr);
+        p.f1(gl, "uLift", data.number("lift", 0.02) as f32);
         p.u1(gl, "uLayer", layer);
         unsafe {
             gl.bind_vertex_array(Some(g.vao));
