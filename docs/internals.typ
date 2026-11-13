@@ -1,18 +1,19 @@
-# Internals
+#import "@local/tdg:0.1.0": *
+#set document(title: "Internals", description: "How wgw works, how to extend it, and how its docs are built.")
 
-## How a figure works
+= How a figure works
 
-1. `wgw.js` finds `.wgw` elements, loads the core (`core/wgw_core_bg.wasm`), and gives each figure a canvas and
-   a `Viewer` from the core.
-2. When a figure nears the screen, the page fetches its `data-src`, the core parses it (`src/io.rs`) and draws it.
-3. The widget's runner loads it. Python widgets run in one worker shared by the page (`js/python-worker.js`),
-   which starts Pyodide as soon as the page is idle; JavaScript widgets are imported on the page.
-4. Controls and clicks call the widget, whose scenes become patches, which the page applies to the core.
++ `wgw.js` finds `.wgw` elements, loads the core (`core/wgw_core_bg.wasm`) if there are any, and gives each
+  figure a canvas and a `Viewer` from the core.
++ When a figure nears the screen, the page fetches its `data-src`, the core parses it (`src/io.rs`) and draws it.
++ The widget's runner loads it. Python widgets run in one worker shared by the page (`js/python-worker.js`),
+  which starts Pyodide as soon as the page is idle; JavaScript widgets are imported on the page.
++ Controls and clicks call the widget, whose scenes become patches, which the page applies to the core.
 
 The core holds the scene and does the drawing, camera, picking and animation; the page handles the DOM, input
 events, controls and widgets. Between them are named n-dimensional arrays (typed arrays with a shape).
 
-## Layout
+= Layout
 
 ```
 src/lib.rs          the modules: the data model and parsers are plain Rust; drawing is built for wasm only
@@ -28,18 +29,19 @@ js/patch.js         patches, and JS scenes as patches; controls as inputs
 js/io.js, style.js  fetching mesh files; reading CSS colors
 python/wgw.py       Widget, controls, layers, shapes and .wgw files
 examples/           fields (every layer type), hover, heat (animated), torus (built in Python), ripple (JavaScript)
+docs/               these docs, as Typst pages for tdg
 ```
 
-## A new layer type
+= A new layer type
 
-1. A Rust module implementing `Primitive` (`src/layer.rs`): `sync` (upload frame k of the layer's arrays when
-   they changed), `draw`, `draw_ids` (the picking pass), `hit` (turn the id under the cursor into an element), and
-   `destroy`.
-2. Its shaders in `src/shaders.rs`, a line in `Kind`, and its arrays' rank in `layer::rank` if any isn't 2.
-3. A class in `python/wgw.py`, and its array names in `ARRAYS` (`js/patch.js`) and `_ARRAYS`
-   (`js/python-worker.js`) if new.
++ A Rust module implementing `Primitive` (`src/layer.rs`): `sync` (upload frame k of the layer's arrays when they
+  changed), `draw`, `draw_ids` (the picking pass), `hit` (turn the id under the cursor into an element), and
+  `destroy`.
++ Its shaders in `src/shaders.rs`, a line in `Kind`, and its arrays' rank in `layer::rank` if any isn't 2.
++ A class in `python/wgw.py`, and its array names in `ARRAYS` (`js/patch.js`) and `_ARRAYS`
+  (`js/python-worker.js`) if new.
 
-## Performance
+= Performance
 
 - Figures draw only when something changes (input, new data, animation, a glide), and only while on screen.
 - The mesh file is parsed in the core and drawn before any widget starts.
@@ -49,7 +51,7 @@ examples/           fields (every layer type), hover, heat (animated), torus (bu
   around the hit.
 - Curves and arrows are instanced: thousands of arrows are one draw call.
 
-## Building and testing
+= Building and testing
 
 ```sh
 ./build.sh [folder]   # wasm-pack builds the core into dist/core; the JS modules and wgw.py are copied beside it
@@ -58,15 +60,15 @@ cargo test            # the parsers, natively
 
 The examples page (`examples/index.html`) loads `dist/`. There are no browser tests in the repository yet.
 
-## The docs
+= The docs
 
-This site is [MkDocs](https://www.mkdocs.org) with the Material theme. The Python reference is generated from
-`wgw.py`'s docstrings by mkdocstrings, and each live figure's source is included from `examples/`, so what's shown
-is what runs. A hook (`hooks/wgw_assets.py`) copies `dist/` and `examples/` into the built site.
+These pages are Typst, built into a site by #link("https://github.com/frisbro303/tdg")[tdg] (`docs/tdg.toml`).
+Each live figure's source is read from `examples/`, so what's shown is what runs, and the Python reference is laid
+out by `api(...)` from `wgw.py`'s docstrings, which tdg reads with griffe.
 
 ```sh
 ./build.sh
-uv run --with-requirements docs/requirements.txt mkdocs serve   # http://localhost:8000
+tdg serve docs   # http://localhost:8000, rebuilt as you edit
 ```
 
 On every push to `main`, `.github/workflows/docs.yml` builds wgw and the site, and publishes it to GitHub Pages.

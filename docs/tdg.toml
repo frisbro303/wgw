@@ -1,0 +1,20 @@
+# wgw's docs, built with tdg (github.com/frisbro303/tdg): tdg build docs
+[site]
+title = "wgw"
+url = "https://frisbro303.github.io/wgw/"
+typst_root = ".."  # pages read the examples, and "/examples/..." is the repository's examples/
+nav = [{ label = "GitHub", href = "https://github.com/frisbro303/wgw" }]
+copy = { examples = "../examples" }
+wgw = "../dist"  # this repository's wgw, not the one bundled with tdg
+search = true
+theme = "docs"
+exclude = ["*.typ", ".DS_Store", "__pycache__", "index.html", "make_spot.py"]
+
+[api]
+page = "reference"
+python = { paths = ["../python"], modules = ["wgw"] }
+
+[[sections]]
+dir = "."
+kind = "doc"
+pages = ["index", "figures", "widgets", "reference", "javascript", "internals"]

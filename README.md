@@ -37,9 +37,9 @@ python3 -m http.server         # examples at http://localhost:8000/examples/
 
 ## Docs
 
-**https://frisbro303.github.io/wgw/**, with live figures: [figures](https://frisbro303.github.io/wgw/figures.html),
-[writing widgets](https://frisbro303.github.io/wgw/widgets.html), the
-[Python reference](https://frisbro303.github.io/wgw/reference.html),
-[JavaScript](https://frisbro303.github.io/wgw/javascript.html) and
-[internals](https://frisbro303.github.io/wgw/internals.html). Their sources are in [`docs/`](docs); to preview
-them, `./build.sh`, then `uv run --with-requirements docs/requirements.txt mkdocs serve`.
+**https://frisbro303.github.io/wgw/**, with live figures: [figures](https://frisbro303.github.io/wgw/figures/),
+[writing widgets](https://frisbro303.github.io/wgw/widgets/), the
+[Python reference](https://frisbro303.github.io/wgw/reference/),
+[JavaScript](https://frisbro303.github.io/wgw/javascript/) and
+[internals](https://frisbro303.github.io/wgw/internals/). They're Typst pages in [`docs/`](docs), built by
+[tdg](https://github.com/frisbro303/tdg): `./build.sh`, then `tdg serve docs`.

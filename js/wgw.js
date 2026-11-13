@@ -9,6 +9,7 @@
 //   data-view="-60,20"         the starting camera: turn and tilt, in degrees
 //   data-pick="click"          when the widget's pick runs: click, hover or none
 //   data-flat                  flat shading for the "mesh" layer
+//   data-credit="false"        no "wgw" link in the corner
 // CSS custom properties style it: --wgw-colors (the colors values run through), --wgw-accent (points,
 // curves and arrows without values), --wgw-edge, --wgw-height.
 //
@@ -21,7 +22,8 @@ import { animates, controlInputs, toPatch } from "./patch.js";
 import { runnerFor, runners } from "./runners.js";
 import { readStyle, rgbaList } from "./style.js";
 
-const wasm = init();
+let wasm = null;
+const loadCore = () => (wasm ||= init());  // only on pages with figures
 const DPR_MAX = 2;
 const REDUCED_MOTION = matchMedia("(prefers-reduced-motion: reduce)");
 
@@ -32,6 +34,8 @@ const STYLE = `
 .wgw-status{position:absolute;left:8px;top:8px;font:12px ui-monospace,monospace;opacity:.6;pointer-events:none;white-space:pre-line}
 .wgw-controls{display:flex;flex-wrap:wrap;justify-content:center;gap:6px 18px;font:13px ui-monospace,monospace}
 .wgw-controls:empty{display:none}
+.wgw-credit{position:absolute;top:8px;right:10px;font:11px ui-monospace,monospace;color:inherit;opacity:.4;text-decoration:none}
+.wgw-credit:hover{opacity:.85;text-decoration:underline}
 .wgw-controls label{display:inline-flex;align-items:center;gap:8px;cursor:pointer;user-select:none}
 .wgw-controls output{min-width:5ch;font-variant-numeric:tabular-nums}
 .wgw-controls input{--c:var(--wgw-control,currentColor);--faint:color-mix(in srgb,var(--c) 22%,transparent);margin:0;cursor:pointer}
@@ -56,6 +60,11 @@ let widgetCount = 0;
 
 const flag = (v) => v !== undefined && v !== "false";
 const format = (x) => String(+(+x).toPrecision(3));
+// "turn,tilt" in degrees; a typographic minus (as Typst writes) reads as one, and anything unreadable as the default.
+const parseView = (text) => {
+  const view = (text || "").split(",").map((x) => Number(x.trim().replace("\u2212", "-")));
+  return view.length === 2 && view.every(Number.isFinite) ? view : [-60, 20];
+};
 // How far along a slider is, for the filled part of its track.
 const fill = (input) => input.style.setProperty("--fill", `${((input.value - input.min) / (input.max - input.min)) * 100}%`);
 
@@ -67,10 +76,11 @@ export class Viewer {
       src: options.src ?? d.src,
       widget: options.widget ?? d.widget,
       up: options.up ?? d.up ?? "z",
-      view: options.view || (d.view ? d.view.split(",").map(Number) : [-60, 20]),
+      view: options.view || parseView(d.view),
       pick: options.pick ?? d.pick ?? "click",
       fps: +(options.fps ?? d.fps ?? 30),
       flat: options.flat ?? flag(d.flat),
+      credit: options.credit ?? d.credit !== "false",
     };
     el.wgw = this;
     el.classList.add("wgw");
@@ -81,6 +91,12 @@ export class Viewer {
     this.statusEl = Object.assign(document.createElement("div"), { className: "wgw-status" });
     this.controlsEl = Object.assign(document.createElement("div"), { className: "wgw-controls" });
     el.append(this.canvas, this.statusEl, this.controlsEl);
+    if (this.options.credit) {  // a small link to wgw; data-credit="false" (or CSS) hides it
+      const credit = Object.assign(document.createElement("a"), {
+        className: "wgw-credit", href: "https://github.com/frisbro303/wgw", textContent: "wgw", target: "_blank", rel: "noopener",
+      });
+      el.append(credit);
+    }
 
     this.controls = {};
     this.functions = [];
@@ -92,7 +108,7 @@ export class Viewer {
 
   async boot() {
     try {
-      await wasm;
+      await loadCore();
       this.core = new Core(this.canvas);
     } catch (err) {
       return this.fail(err);

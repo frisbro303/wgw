@@ -286,6 +286,7 @@ class Mesh(Layer):
 
     @property
     def face_areas(self):
+        """Each face's area `(m)`."""
         return 0.5 * np.linalg.norm(self._cross(), axis=1)
 
     @property
@@ -307,6 +308,7 @@ class Mesh(Layer):
 
     @property
     def area(self):
+        """The total area."""
         return float(self.face_areas.sum())
 
     def _cross(self):
@@ -418,7 +420,9 @@ Scene = dict  # layers by name: {"mesh": Mesh(...), "dot": Points(...), "gone": 
 class Widget:
     """A widget: what a figure starts as, its controls, and how it responds to them.
 
-    A widget file's `widget(mesh)` (or `widget()`, for a figure without a mesh) returns one.
+    A widget file's `widget(mesh)` (or `widget()`, for a figure without a mesh) returns one. Every field is
+    optional: a widget with no controls, no `on_pick` or no grid just leaves them out, and `Widget(scene=...)` alone
+    is a figure built in Python that doesn't respond to anything.
 
     `on_change` and `on_pick` return a **scene**: layers by name. Each replaces the layer of that name exactly as
     given; `None` removes one; layers not named are kept. A single layer means `{"mesh": layer}`, and `None`

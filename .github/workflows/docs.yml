@@ -1,4 +1,4 @@
-# Build wgw and its docs site on every push to main, and publish the site to GitHub Pages.
+# Build wgw and its docs (Typst pages, built by tdg) on every push to main, and publish them to GitHub Pages.
 # (Pages must be set to deploy from GitHub Actions: Settings > Pages > Source.)
 name: Docs
 on:
@@ -24,13 +24,14 @@ jobs:
       - run: cargo test
       - run: cargo install wasm-pack --locked
       - run: ./build.sh
-      - run: |
-          python3 -m venv .venv
-          .venv/bin/pip install -r docs/requirements.txt
-          .venv/bin/mkdocs build --strict
+      - uses: typst-community/setup-typst@v5
+        with:
+          typst-version: 0.15.0
+      - run: pip install "tdg @ git+https://github.com/frisbro303/tdg" "pagefind[bin]"
+      - run: tdg build docs
       - uses: actions/upload-pages-artifact@v5
         with:
-          path: site/
+          path: docs/_site/
 
   deploy:
     needs: build
