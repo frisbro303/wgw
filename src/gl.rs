@@ -1,22 +1,28 @@
-//! Small helpers over glow: programs with their uniforms looked up by name, buffers, colormap textures.
+//! Small helpers over glow: programs with their uniforms set by name, buffers, colormap textures.
 
 use std::collections::HashMap;
 
 use glam::Mat4;
 use glow::HasContext;
 
-pub type Rgba = [f32; 4];
+pub use wgw_scene::Rgba;
 
+use crate::shaders::ShaderDef;
+
+/// A compiled program. Its uniforms live in one uniform block (as naga writes WGSL uniforms for WebGL), held in a
+/// buffer of its own; the setters write a uniform by name into it. Textures are plain sampler uniforms.
 pub struct Program {
     pub program: glow::Program,
-    uniforms: HashMap<String, glow::UniformLocation>,
+    def: &'static ShaderDef,
+    block: glow::Buffer,
+    samplers: HashMap<&'static str, glow::UniformLocation>,
 }
 
 impl Program {
-    pub fn new(gl: &glow::Context, vs: &str, fs: &str) -> Result<Self, String> {
+    pub fn new(gl: &glow::Context, def: &'static ShaderDef) -> Result<Self, String> {
         unsafe {
             let program = gl.create_program()?;
-            for (kind, source) in [(glow::VERTEX_SHADER, vs), (glow::FRAGMENT_SHADER, fs)] {
+            for (kind, source) in [(glow::VERTEX_SHADER, def.vertex), (glow::FRAGMENT_SHADER, def.fragment)] {
                 let shader = gl.create_shader(kind)?;
                 gl.shader_source(shader, source);
                 gl.compile_shader(shader);
@@ -29,57 +35,66 @@ impl Program {
             if !gl.get_program_link_status(program) {
                 return Err(gl.get_program_info_log(program));
             }
-            let mut uniforms = HashMap::new();
-            for i in 0..gl.get_active_uniforms(program) {
-                if let Some(u) = gl.get_active_uniform(program, i) {
-                    if let Some(location) = gl.get_uniform_location(program, &u.name) {
-                        uniforms.insert(u.name, location);
-                    }
+            // Every stage's block reads the program's one buffer, at binding 0.
+            for name in def.blocks {
+                if let Some(index) = gl.get_uniform_block_index(program, name) {
+                    gl.uniform_block_binding(program, index, 0);
                 }
             }
-            Ok(Program { program, uniforms })
+            let block = gl.create_buffer()?;
+            gl.bind_buffer(glow::UNIFORM_BUFFER, Some(block));
+            gl.buffer_data_size(glow::UNIFORM_BUFFER, def.size.max(16) as i32, glow::DYNAMIC_DRAW);
+            let samplers = def.textures.iter()
+                .filter_map(|&(name, glsl)| gl.get_uniform_location(program, glsl).map(|l| (name, l)))
+                .collect();
+            Ok(Program { program, def, block, samplers })
         }
     }
 
     pub fn bind(&self, gl: &glow::Context) {
-        unsafe { gl.use_program(Some(self.program)) }
+        unsafe {
+            gl.use_program(Some(self.program));
+            gl.bind_buffer_base(glow::UNIFORM_BUFFER, 0, Some(self.block));
+        }
     }
 
-    // Setters skip uniforms the compiler optimized out.
-    pub fn mat4(&self, gl: &glow::Context, name: &str, m: &Mat4) {
-        if let Some(l) = self.uniforms.get(name) {
-            unsafe { gl.uniform_matrix_4_f32_slice(Some(l), false, &m.to_cols_array()) }
+    /// Write a uniform's bytes into the block; uniforms the program doesn't have are skipped.
+    fn set(&self, gl: &glow::Context, name: &str, bytes: &[u8]) {
+        if let Some(&(_, offset, size)) = self.def.uniforms.iter().find(|u| u.0 == name) {
+            let n = bytes.len().min(size as usize);
+            unsafe {
+                gl.bind_buffer(glow::UNIFORM_BUFFER, Some(self.block));
+                gl.buffer_sub_data_u8_slice(glow::UNIFORM_BUFFER, offset as i32, &bytes[..n]);
+            }
         }
+    }
+
+    pub fn mat4(&self, gl: &glow::Context, name: &str, m: &Mat4) {
+        self.set(gl, name, bytemuck::cast_slice(&m.to_cols_array()));
     }
 
     pub fn f1(&self, gl: &glow::Context, name: &str, x: f32) {
-        if let Some(l) = self.uniforms.get(name) {
-            unsafe { gl.uniform_1_f32(Some(l), x) }
-        }
+        self.set(gl, name, bytemuck::bytes_of(&x));
     }
 
     pub fn f2(&self, gl: &glow::Context, name: &str, x: f32, y: f32) {
-        if let Some(l) = self.uniforms.get(name) {
-            unsafe { gl.uniform_2_f32(Some(l), x, y) }
-        }
+        self.set(gl, name, bytemuck::cast_slice(&[x, y]));
     }
 
     pub fn f4(&self, gl: &glow::Context, name: &str, v: Rgba) {
-        if let Some(l) = self.uniforms.get(name) {
-            unsafe { gl.uniform_4_f32(Some(l), v[0], v[1], v[2], v[3]) }
-        }
+        self.set(gl, name, bytemuck::cast_slice(&v));
     }
 
+    /// An integer uniform, or a texture's unit.
     pub fn i1(&self, gl: &glow::Context, name: &str, x: i32) {
-        if let Some(l) = self.uniforms.get(name) {
-            unsafe { gl.uniform_1_i32(Some(l), x) }
+        match self.samplers.get(name) {
+            Some(l) => unsafe { gl.uniform_1_i32(Some(l), x) },
+            None => self.set(gl, name, bytemuck::bytes_of(&x)),
         }
     }
 
     pub fn u1(&self, gl: &glow::Context, name: &str, x: u32) {
-        if let Some(l) = self.uniforms.get(name) {
-            unsafe { gl.uniform_1_u32(Some(l), x) }
-        }
+        self.set(gl, name, bytemuck::bytes_of(&x));
     }
 }
 

@@ -1,0 +1,3 @@
+# A Typst plugin has no source of randomness: the engine's hashing gets a fixed stream instead (src/lib.rs).
+[target.wasm32-unknown-unknown]
+rustflags = ['--cfg', 'getrandom_backend="custom"']

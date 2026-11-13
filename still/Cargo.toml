@@ -1,0 +1,25 @@
+[package]
+name = "wgw-still"
+version = "0.1.0"
+edition = "2021"
+description = "wgw figures drawn as SVG, for PDFs: a Typst plugin that runs a JavaScript widget and draws its scene"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+boa_engine = { version = "0.22", default-features = false }
+wasm-minimal-protocol = "0.1"
+wgw-scene = { path = "../scene" }
+glam = "0.30"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+# Boa asks for randomness (for hashing); a Typst plugin has none, so it gets a fixed stream (see lib.rs).
+getrandom = "0.4"
+getrandom03 = { package = "getrandom", version = "0.3" }
+
+[profile.release]
+opt-level = "s"
+lto = true
+codegen-units = 1
+strip = true

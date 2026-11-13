@@ -35,19 +35,7 @@ impl Primitive for Lines {
         let positions = data.rows("vertices", 3, k, None)?.ok_or("lines need vertices")?;
         let n = positions.len() / 3;
         let values = data.rows("values", 1, k, Some(n))?;
-        self.segments = match data.arrays.get("segments").and_then(|a| a.u32s()) {
-            Some(s) => s.chunks_exact(2).map(|s| [s[0], s[1]]).collect(),
-            None => {
-                let mut s: Vec<[u32; 2]> = (1..n as u32).map(|i| [i - 1, i]).collect();
-                if data.flag("closed", false) && n > 2 {
-                    s.push([n as u32 - 1, 0]);
-                }
-                s
-            }
-        };
-        if self.segments.iter().flatten().any(|&i| i as usize >= n) {
-            return Err(format!("segments must be indices below {n}"));
-        }
+        self.segments = wgw_scene::geometry::segments(data, n)?;
         let mut instances = Vec::with_capacity(self.segments.len() * 8);
         for &[a, b] in &self.segments {
             let (a, b) = (a as usize, b as usize);

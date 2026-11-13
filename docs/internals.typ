@@ -5,7 +5,8 @@
 
 + `wgw.js` finds `.wgw` elements, loads the core (`core/wgw_core_bg.wasm`) if there are any, and gives each
   figure a canvas and a `Viewer` from the core.
-+ When a figure nears the screen, the page fetches its `data-src`, the core parses it (`src/io.rs`) and draws it.
++ When a figure nears the screen, the page fetches its `data-src`, the core parses it (`scene/src/mesh_file.rs`)
+  and draws it.
 + The widget's runner loads it. Python widgets run in one worker shared by the page (`js/python-worker.js`),
   which starts Pyodide as soon as the page is idle; JavaScript widgets are imported on the page.
 + Controls and clicks call the widget, whose scenes become patches, which the page applies to the core.
@@ -16,13 +17,14 @@ events, controls and widgets. Between them are named n-dimensional arrays (typed
 = Layout
 
 ```
-src/lib.rs          the modules: the data model and parsers are plain Rust; drawing is built for wasm only
-src/viewer.rs       the Viewer the page talks to: layers, camera, input, picking, animation, the frame loop
-src/layer.rs        the layer model, and the Primitive trait each layer type implements
+shaders/            the shaders, in WGSL: common.wgsl (lighting, colormaps, picking ids) and one file per layer type
+build.rs            translates them to GLSL for WebGL with naga, as wgpu does
+scene/              wgw-scene, the scene without a renderer: arrays, layers, .obj and .wgw files, the camera and
+                    framing, colors and lighting
+src/viewer.rs       the Viewer the page talks to: layers, cameras, panes, input, picking, animation, the frame loop
+src/layer.rs        the Primitive trait each layer type implements to draw with WebGL
 src/mesh.rs, points.rs, lines.rs, vectors.rs     one module per layer type
-src/io.rs           .obj and .wgw parsing
-src/array.rs        arrays with shapes and frames
-src/camera.rs, shaders.rs, gl.rs
+src/shaders.rs, gl.rs   the generated programs, and small helpers over glow
 js/wgw.js           figures: the DOM, input, controls, applying patches
 js/runners.js       running widgets: Python (in python-worker.js) and JavaScript
 js/patch.js         patches, and JS scenes as patches; controls as inputs
@@ -37,7 +39,8 @@ docs/               these docs, as Typst pages for tdg
 + A Rust module implementing `Primitive` (`src/layer.rs`): `sync` (upload frame k of the layer's arrays when they
   changed), `draw`, `draw_ids` (the picking pass), `hit` (turn the id under the cursor into an element), and
   `destroy`.
-+ Its shaders in `src/shaders.rs`, a line in `Kind`, and its arrays' rank in `layer::rank` if any isn't 2.
++ Its shaders in `shaders/<type>.wgsl` and its programs in `build.rs`, a line in `Kind` (`scene/src/layer.rs`),
+  and its arrays' rank in `layer::rank` if any isn't 2.
 + A class in `python/wgw.py`, and its array names in `ARRAYS` (`js/patch.js`) and `_ARRAYS`
   (`js/python-worker.js`) if new.
 

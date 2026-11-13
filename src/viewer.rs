@@ -1,7 +1,7 @@
 //! The Viewer the page talks to: a scene of layers, its camera, input, picking and animation.
 
 use crate::{array, camera, gl, io, layer, shaders};
-use glam::{Vec2, Vec3, Vec4, Vec4Swizzles};
+use glam::{Vec2, Vec4, Vec4Swizzles};
 use glow::HasContext;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
@@ -35,8 +35,16 @@ pub struct Viewer {
     shaders: Shaders,
     layers: Vec<Layer>,
     style: Style,
+    /// The starting camera, which each pane's camera begins as.
     camera: Camera,
-    fit: Option<Fit>,
+    /// Each pane's own camera, so dragging in one turns only it.
+    cameras: Vec<Camera>,
+    /// The pane the current press began in.
+    active: usize,
+    /// Each pane's fit: layers with `pane` = 1 are drawn in a second pane, beside the first, fitted on their own.
+    fits: Vec<Option<Fit>>,
+    /// The panes' relative widths, when they aren't equal.
+    pane_widths: Vec<f32>,
     fitted: u64,
     animation: Animation,
     frame: usize,
@@ -73,7 +81,10 @@ impl Viewer {
             layers: Vec::new(),
             style: Style { colormap: vec![[0.85, 0.84, 0.81, 1.0], red], accent: red, edge: [0.0, 0.0, 0.0, 0.3], grid: false },
             camera: Camera::new(),
-            fit: None,
+            cameras: Vec::new(),
+            active: 0,
+            fits: Vec::new(),
+            pane_widths: Vec::new(),
             fitted: 0,
             animation: Animation { start: f64::NEG_INFINITY, fps: 30.0, looped: false },
             frame: 0,
@@ -103,13 +114,13 @@ impl Viewer {
             Some(layer) => {
                 if let Some(kind) = parsed.filter(|k| *k != layer.data.kind) {
                     layer.primitive.destroy(&self.gl);
-                    layer.primitive = kind.primitive();
+                    layer.primitive = layer::primitive(kind);
                     layer.data.kind = kind;
                 }
             }
             None => {
                 let kind = parsed.unwrap_or(Kind::Points);
-                self.layers.push(Layer { name: name.into(), data: LayerData::new(kind), primitive: kind.primitive() });
+                self.layers.push(Layer { name: name.into(), data: LayerData::new(kind), primitive: layer::primitive(kind) });
             }
         }
         self.touch(name);
@@ -151,8 +162,8 @@ impl Viewer {
     /// Show a parsed mesh file as the mesh layer `name`.
     pub fn set_mesh_file(&mut self, name: &str, file: &io::MeshFile) -> Result<(), JsValue> {
         let err = |e: String| JsValue::from_str(&e);
-        let (vertices, vshape) = file.vertices().map_err(err)?;
-        let (faces, fshape) = file.faces().map_err(err)?;
+        let (vertices, vshape) = file.0.vertices().map_err(err)?;
+        let (faces, fshape) = file.0.faces().map_err(err)?;
         self.set_layer(name, "mesh")?;
         self.set_array(name, "vertices", Data::F32(vertices), vshape.into_iter().map(|s| s as u32).collect())?;
         self.set_array(name, "faces", Data::U32(faces), fshape.into_iter().map(|s| s as u32).collect())
@@ -215,17 +226,23 @@ impl Viewer {
     }
 
     /// The up axis ("x", "y", "z"), the starting view (turn and tilt, degrees), and whether to keep motion down.
-    pub fn set_options(&mut self, up: &str, yaw: f32, pitch: f32, reduced_motion: bool) {
+    /// `scale` magnifies the starting view: 2 shows the scene twice as large (it fits the view at 1).
+    pub fn set_options(&mut self, up: &str, yaw: f32, pitch: f32, scale: f32, reduced_motion: bool) {
         self.camera.up = Up::parse(up);
         self.camera.home = (yaw.to_radians(), pitch.to_radians());
+        self.camera.home_zoom = (1.0 / scale.max(0.25)).clamp(0.2, 4.0);
         self.camera.reset();
+        self.cameras.clear();
         self.reduced_motion = reduced_motion;
     }
 
-    /// Play the scene's frames from now at fps, once or looping; not animated, jump to the last frame.
+    /// Play the scene's frames from now at fps, once or looping; not animated, jump to the last frame. A loop that's
+    /// already playing carries on from where it is, so new frames (a slider dragged) don't restart it each time.
     pub fn play(&mut self, now: f64, fps: f64, looped: bool, animate: bool) {
         let animate = looped || (animate && !self.reduced_motion);
-        self.animation = Animation { start: if animate { now } else { f64::NEG_INFINITY }, fps: fps.max(1.0), looped };
+        let playing = self.animation.looped && looped && self.animation.start.is_finite();
+        let start = if playing { self.animation.start } else if animate { now } else { f64::NEG_INFINITY };
+        self.animation = Animation { start, fps: fps.max(1.0), looped };
     }
 
     // ---- input, in CSS pixels from the canvas's top left
@@ -234,7 +251,11 @@ impl Viewer {
         self.pointers.retain(|p| p.0 != id);
         self.pointers.push((id, x, y));
         self.press = (self.pointers.len() == 1).then_some(0.0);
-        self.camera.velocity = (0.0, 0.0);
+        if self.pointers.len() == 1 {
+            let px = (x * self.dpr) as i32;
+            self.active = (0..self.cameras.len()).find(|&i| { let (x0, w) = self.pane_rect(i); px >= x0 && px < x0 + w }).unwrap_or(0);
+        }
+        self.cam().velocity = (0.0, 0.0);
         self.last_move = now;
     }
 
@@ -244,11 +265,12 @@ impl Viewer {
         let (_, px, py) = self.pointers[i];
         let (dx, dy) = (x - px, y - py);
         if self.pointers.len() == 1 {
-            self.camera.turn(-dx * TURN_SPEED, dy * TURN_SPEED);
             let dt = (now - self.last_move).max(1.0) as f32;
             let blend = (dt / 40.0).min(1.0); // smoothed velocity, in radians per ms
-            let v = self.camera.velocity;
-            self.camera.velocity =
+            let camera = self.cam();
+            camera.turn(-dx * TURN_SPEED, dy * TURN_SPEED);
+            let v = camera.velocity;
+            camera.velocity =
                 (v.0 * (1.0 - blend) - dx * TURN_SPEED / dt * blend, v.1 * (1.0 - blend) + dy * TURN_SPEED / dt * blend);
             if let Some(moved) = &mut self.press {
                 *moved += dx.abs() + dy.abs();
@@ -257,7 +279,7 @@ impl Viewer {
             let (_, ox, oy) = self.pointers[1 - i];
             let (before, after) = ((px - ox).hypot(py - oy), (x - ox).hypot(y - oy));
             if after > 0.0 {
-                self.camera.zoom_by(before / after);
+                self.cam().zoom_by(before / after);
             }
         }
         self.pointers[i] = (id, x, y);
@@ -274,19 +296,31 @@ impl Viewer {
         }
         let click = !cancelled && self.press.is_some_and(|moved| moved < CLICK_SLOP);
         if click || now - self.last_move > 60.0 || self.reduced_motion {
-            self.camera.velocity = (0.0, 0.0); // held still before letting go: no glide
+            self.cam().velocity = (0.0, 0.0); // held still before letting go: no glide
         }
         self.press = None;
         click
     }
 
     pub fn zoom_by(&mut self, factor: f32) {
-        self.camera.zoom_by(factor);
+        for camera in &mut self.cameras {
+            camera.zoom_by(factor);
+        }
+    }
+
+    /// The panes' relative widths, `[2, 1]` for a first pane twice as wide as the second; empty for equal panes.
+    pub fn set_pane_widths(&mut self, widths: Vec<f32>) {
+        self.pane_widths = widths;
+    }
+
+    /// The animation frame on screen, so a widget can start something new in step with what's playing.
+    pub fn current_frame(&self) -> u32 {
+        self.frame as u32
     }
 
     pub fn reset(&mut self) {
-        self.camera.reset();
-        self.fit = None;
+        self.cameras.clear();
+        self.fits.clear();
     }
 
     // ---- drawing
@@ -300,12 +334,14 @@ impl Viewer {
         self.last_frame = now;
         let mut moving = false;
 
-        let (vy, vp) = self.camera.velocity;
-        if self.pointers.is_empty() && vy.abs() + vp.abs() > 2e-5 {
-            self.camera.turn(vy * dt, vp * dt);
-            let decay = (-dt / GLIDE).exp();
-            self.camera.velocity = (vy * decay, vp * decay);
-            moving = true;
+        for camera in &mut self.cameras {
+            let (vy, vp) = camera.velocity;
+            if self.pointers.is_empty() && vy.abs() + vp.abs() > 2e-5 {
+                camera.turn(vy * dt, vp * dt);
+                let decay = (-dt / GLIDE).exp();
+                camera.velocity = (vy * decay, vp * decay);
+                moving = true;
+            }
         }
 
         let frames = self.layers.iter().map(|l| l.data.frames()).max().unwrap_or(1);
@@ -333,14 +369,15 @@ impl Viewer {
     /// What's under a point (CSS pixels from the canvas's top left): [layer index, element index, x, y, z], or
     /// nothing. The element is a vertex for meshes, points and curves, and a vector's index for vector fields.
     pub fn pick(&mut self, x: f32, y: f32) -> Option<Vec<f64>> {
-        let fit = self.fit?;
         let (w, h) = (self.size.0 as i32, self.size.1 as i32);
         let px = (x * self.dpr).floor() as i32;
         let py = h - 1 - (y * self.dpr).floor() as i32;
         if px < 0 || py < 0 || px >= w || py >= h {
             return None;
         }
-        let view = self.view(fit);
+        let pane = (0..self.fits.len()).find(|&i| { let (x0, pw) = self.pane_rect(i); px >= x0 && px < x0 + pw })?;
+        let (x0, pw) = self.pane_rect(pane);
+        let view = self.view(self.fits[pane]?, pane);
         let mut pixel = [0u8; 4];
         let gl = &self.gl;
         unsafe {
@@ -361,7 +398,7 @@ impl Viewer {
                 self.pick_target = Some(PickTarget { size: (w, h), ..t });
             }
             gl.bind_framebuffer(glow::FRAMEBUFFER, Some(self.pick_target.as_ref().unwrap().framebuffer));
-            gl.viewport(0, 0, w, h);
+            gl.viewport(x0, 0, pw, h);
             gl.enable(glow::SCISSOR_TEST);
             gl.scissor(px, py, 1, 1); // only the pixel under the pointer is drawn
             gl.clear_color(0.0, 0.0, 0.0, 0.0);
@@ -369,7 +406,7 @@ impl Viewer {
             gl.enable(glow::DEPTH_TEST);
             for (i, layer) in self.layers.iter().enumerate() {
                 let default = matches!(layer.data.kind, Kind::Mesh | Kind::Points);
-                if layer.data.flag("pickable", default) && layer.data.flag("visible", true) {
+                if pane_of(layer) == pane && layer.data.flag("pickable", default) && layer.data.flag("visible", true) {
                     layer.primitive.draw_ids(gl, &self.shaders, &view, &layer.data, i as u32);
                 }
             }
@@ -385,7 +422,7 @@ impl Viewer {
 
         // The ray through the pixel, in the layers' own units.
         let inverse = (view.proj * view.model_view).inverse();
-        let ndc = Vec2::new(2.0 * (px as f32 + 0.5) / w as f32 - 1.0, 2.0 * (py as f32 + 0.5) / h as f32 - 1.0);
+        let ndc = Vec2::new(2.0 * ((px - x0) as f32 + 0.5) / pw as f32 - 1.0, 2.0 * (py as f32 + 0.5) / h as f32 - 1.0);
         let near = inverse * Vec4::new(ndc.x, ndc.y, -1.0, 1.0);
         let far = inverse * Vec4::new(ndc.x, ndc.y, 1.0, 1.0);
         let (near, far) = (near.xyz() / near.w, far.xyz() / far.w);
@@ -428,52 +465,37 @@ impl Viewer {
         }
     }
 
-    /// Fit the camera to the scene when it first has something in it, and widen the fit whenever the scene grows
-    /// out of it; it never shrinks, so a shape that changes size reads as changing size.
+    /// Fit the camera to each pane's layers when they first have something in them, and widen a fit whenever its
+    /// layers grow out of it, in any frame; it never shrinks, so a shape that changes size reads as changing size.
     fn refit(&mut self) {
         let scene: u64 = self.layers.iter().map(|l| l.data.version).sum::<u64>() + self.layers.len() as u64;
-        if self.fit.is_some() && scene == self.fitted {
+        let panes = self.layers.iter().map(pane_of).max().map_or(1, |p| p + 1);
+        if self.fits.len() == panes && self.fits.iter().all(Option::is_some) && scene == self.fitted {
             return;
         }
         self.fitted = scene;
-        let frame = self.frame;
-        let layers = &self.layers;
-        let each = |f: &mut dyn FnMut(Vec3)| {
-            for l in layers {
-                l.data.for_each_point(frame.min(l.data.frames() - 1), &mut *f);
-            }
-        };
-        let (mut lo, mut hi, mut any) = (Vec3::INFINITY, Vec3::NEG_INFINITY, false);
-        each(&mut |p| {
-            lo = lo.min(p);
-            hi = hi.max(p);
-            any = true;
-        });
-        if !any {
-            return;
+        self.fits.resize(panes, None);
+        let start = self.camera.clone();
+        self.cameras.resize_with(panes, || start.clone());
+        for (pane, slot) in self.fits.iter_mut().enumerate() {
+            *slot = camera::fit(self.layers.iter().filter(|l| pane_of(l) == pane).map(|l| &l.data), *slot);
         }
-        if let Some(fit) = self.fit {
-            let mut outside = false;
-            each(&mut |p| outside |= p.distance(fit.center) > fit.radius * 1.0001);
-            if !outside {
-                return;
-            }
-        }
-        let center = (lo + hi) / 2.0;
-        let mut radius = 0f32;
-        each(&mut |p| radius = radius.max(p.distance(center)));
-        self.fit = Some(Fit { center, radius: if radius > 0.0 { radius } else { 1.0 } });
     }
 
-    fn view(&self, fit: Fit) -> View {
-        let (view, proj) = self.camera.matrices(self.size.0 as f32 / self.size.1 as f32);
-        View {
-            model_view: view * fit.model(),
-            proj,
-            viewport: Vec2::new(self.size.0 as f32, self.size.1 as f32),
-            dpr: self.dpr,
-            radius: fit.radius,
-        }
+    /// Pane i's left edge and width, in device pixels: the panes split the canvas side by side, by their widths.
+    fn pane_rect(&self, i: usize) -> (i32, i32) {
+        let n = self.fits.len().max(1);
+        let weight = |k: usize| self.pane_widths.get(k).copied().filter(|w| *w > 0.0).unwrap_or(1.0);
+        let total: f32 = (0..n).map(weight).sum();
+        let edge = |k: usize| ((0..k).map(weight).sum::<f32>() / total * self.size.0 as f32).round() as i32;
+        (edge(i), edge(i + 1) - edge(i))
+    }
+
+    fn view(&self, fit: Fit, pane: usize) -> View {
+        let (_, pw) = self.pane_rect(pane);
+        let (pw, h) = (pw.max(1) as f32, self.size.1 as f32);
+        let (view, proj) = self.cameras.get(pane).unwrap_or(&self.camera).matrices(pw / h);
+        View { model_view: view * fit.model(), proj, viewport: Vec2::new(pw, h), dpr: self.dpr, radius: fit.radius }
     }
 
     fn draw(&mut self) {
@@ -484,12 +506,29 @@ impl Viewer {
             gl.clear(glow::COLOR_BUFFER_BIT | glow::DEPTH_BUFFER_BIT);
             gl.enable(glow::DEPTH_TEST);
         }
-        let Some(fit) = self.fit else { return };
-        let view = self.view(fit);
-        for layer in &self.layers {
-            if layer.data.flag("visible", true) {
-                layer.primitive.draw(gl, &self.shaders, &view, &layer.data, &self.style);
+        for pane in 0..self.fits.len() {
+            let Some(fit) = self.fits[pane] else { continue };
+            let (x0, pw) = self.pane_rect(pane);
+            unsafe { gl.viewport(x0, 0, pw, self.size.1 as i32) };
+            let view = self.view(fit, pane);
+            for layer in self.layers.iter().filter(|l| pane_of(l) == pane) {
+                if layer.data.flag("visible", true) {
+                    layer.primitive.draw(gl, &self.shaders, &view, &layer.data, &self.style);
+                }
             }
         }
     }
+}
+
+impl Viewer {
+    /// The camera of the pane being dragged (the starting camera before any pane exists).
+    fn cam(&mut self) -> &mut Camera {
+        let i = self.active.min(self.cameras.len().saturating_sub(1));
+        if self.cameras.is_empty() { &mut self.camera } else { &mut self.cameras[i] }
+    }
+}
+
+/// Which pane a layer is drawn in: its `pane` parameter, 0 (the first) by default.
+fn pane_of(layer: &Layer) -> usize {
+    layer.data.number("pane", 0.0).max(0.0) as usize
 }

@@ -163,11 +163,12 @@ class Layer:
 
     | parameter | default | |
     |---|---|---|
-    | `color` | | one CSS color for the whole layer |
-    | `colors` | the figure's | a list of CSS colors for `values` to run through |
+    | `color` | | one CSS color for the whole layer, which may be the page's: `"var(--link)"` follows its theme |
+    | `colors` | the figure's | a list of CSS colors for `values` to run through, `var(...)` too |
     | `min`, `max` | `0`, `1` | the range of `values` the colors span |
     | `visible` | `True` | |
     | `pickable` | meshes and points | whether clicks pick it |
+    | `pane` | `0` | which pane it's drawn in: layers with `pane=1` get a second view, beside the first, sized on its own |
 
     Without `values` or `color`, meshes take the first of the figure's colors, and other layers its accent.
     """

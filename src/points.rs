@@ -36,8 +36,8 @@ impl Primitive for Points {
             let vao = gl.create_vertex_array().expect("create vertex array");
             gl.bind_vertex_array(Some(vao));
             let (position, value) = (gl::buffer(gl), gl::buffer(gl));
-            gl::attribute(gl, position, 0, 3, 0, 0, 0);
-            gl::attribute(gl, value, 2, 1, 0, 0, 0);
+            gl::attribute(gl, position, 0, 3, 0, 0, 1);  // per point: each is an instanced square
+            gl::attribute(gl, value, 2, 1, 0, 0, 1);
             gl.bind_vertex_array(None);
             Gpu { vao, position, value, colormap: gl::colormap(gl, None, &[[0.0; 4]]) }
         });
@@ -58,12 +58,13 @@ impl Primitive for Points {
         p.mat4(gl, "uProj", &view.proj);
         p.f1(gl, "uSize", data.number("size", 6.0) as f32 * view.dpr);
         p.f1(gl, "uLift", data.number("lift", 0.02) as f32);
+        p.f2(gl, "uViewport", view.viewport.x, view.viewport.y);
         let range = data.range();
         p.f2(gl, "uRange", range.x, range.y);
         gl::bind_texture(gl, p, "uMap", g.colormap);
         unsafe {
             gl.bind_vertex_array(Some(g.vao));
-            gl.draw_arrays(glow::POINTS, 0, self.count);
+            gl.draw_arrays_instanced(glow::TRIANGLES, 0, 6, self.count);
             gl.bind_vertex_array(None);
         }
     }
@@ -76,10 +77,11 @@ impl Primitive for Points {
         p.mat4(gl, "uProj", &view.proj);
         p.f1(gl, "uSize", data.number("size", 6.0) as f32 * view.dpr);
         p.f1(gl, "uLift", data.number("lift", 0.02) as f32);
+        p.f2(gl, "uViewport", view.viewport.x, view.viewport.y);
         p.u1(gl, "uLayer", layer);
         unsafe {
             gl.bind_vertex_array(Some(g.vao));
-            gl.draw_arrays(glow::POINTS, 0, self.count);
+            gl.draw_arrays_instanced(glow::TRIANGLES, 0, 6, self.count);
             gl.bind_vertex_array(None);
         }
     }

@@ -15,8 +15,9 @@ holds, as an object. It runs on the page, with no Pyodide to load. This one buil
   [`scene`], [layers to start with, by name],
   [`controls`], [`[min, max, value]`, with a step and/or `"log"` after it, for sliders; `true`/`false` for checkboxes],
   [`onChange(controls)`], [returns a scene; at the start and whenever a control changes],
-  [`onPick(vertex, controls, layer)`], [returns a scene; on a click],
+  [`onPick(vertex, controls, layer, {point, frame})`], [returns a scene; on a click. `point` is the exact spot clicked, in the scene's units, and `frame` the animation frame on screen, to start something new in step with it],
   [`grid`, `fps`, `loop`], [as in Python; `grid` may be `{toggle: true}` for a checkbox],
+  [`panes`], [the panes' relative widths, such as `[2, 1]`, for layers split between panes with their `pane` parameter],
 )
 
 `mesh` is the figure's mesh file as arrays, `{vertices: {data, shape, dtype}, faces: ..., ...}`, or `null`.

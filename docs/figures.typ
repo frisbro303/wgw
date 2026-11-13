@@ -32,7 +32,7 @@ captioned like any other; tdg publishes its files (given as paths) with the site
   [`data-src`], [], [a mesh file, `.obj` or `.wgw`; shown as the layer `mesh`],
   [`data-widget`], [], [a widget, `.py` or `.js` (#link("/widgets/")[writing widgets])],
   [`data-up`], [`z`], [the axis that points up: `x`, `y` or `z`],
-  [`data-view`], [`-60,20`], [the starting camera: turn about the up axis, then tilt, in degrees],
+  [`data-view`], [`-60,20`], [the starting camera: turn about the up axis, then tilt, in degrees; then, optionally, a scale (`-60,20,1.5` shows the scene half again as large, for a wide scene the fit leaves small)],
   [`data-pick`], [`click`], [when the widget's `on_pick` runs: `click`, `hover` or `none`],
   [`data-flat`], [off], [flat shading for the `mesh` layer],
   [`data-label`], [], [the figure's accessible description],
@@ -76,5 +76,5 @@ Any CSS color works, `var(...)` included, so figures can follow a site's theme:
 ```
 
 When the theme switches (a `data-theme` or `class` on `<html>` or `<body>`, or the system's setting), every
-figure recolors. The controls row (`.wgw-controls`) and the status line (`.wgw-status`) can be restyled too;
+figure recolors, along with layer colors a widget gives as the page's variables (`color="var(--link)"`). The controls row (`.wgw-controls`) and the status line (`.wgw-status`) can be restyled too;
 wgw's own styles come first in the page, so a site's win.

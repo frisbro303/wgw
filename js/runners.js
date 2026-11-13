@@ -64,7 +64,7 @@ const py = {
 };
 
 // ---- JavaScript: an ES module exporting widget(mesh), which returns
-//   {scene, controls, onChange(controls), onPick(index, controls, layer), grid, fps, loop}
+//   {scene, controls, onChange(controls), onPick(index, controls, layer, {point, frame}), grid, fps, loop, panes}
 // like Python's Widget; grid is true, false, or {toggle: true | false} for a checkbox.
 
 const widgets = new Map();
@@ -85,12 +85,13 @@ const js = {
       fps: w.fps ?? 30,
       loop: !!w.loop,
       picked: w.picked ?? null,
+      panes: w.panes ?? null,
       result: toPatch(key, w.scene),
     };
   },
-  async call(key, name, index, layer, controls) {
+  async call(key, name, index, layer, controls, where = {}) {
     const w = widgets.get(key);
-    return toPatch(key, await (name === "change" ? w.onChange(controls) : w.onPick(index, controls, layer)));
+    return toPatch(key, await (name === "change" ? w.onChange(controls) : w.onPick(index, controls, layer, where)));
   },
 };
 

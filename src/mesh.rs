@@ -6,6 +6,8 @@ use glam::Vec3;
 use glow::HasContext;
 
 use crate::gl::{self, upload};
+use wgw_scene::geometry::{unique_edges, vertex_normals};
+
 use crate::layer::{Hit, LayerData, Primitive, Style, View};
 use crate::shaders::Shaders;
 
@@ -184,36 +186,6 @@ impl Primitive for Mesh {
 }
 
 /// Area-weighted vertex normals.
-pub fn vertex_normals(p: &[f32], faces: &[u32]) -> Vec<f32> {
-    let mut normals = vec![0.0f32; p.len()];
-    let at = |v: u32| Vec3::new(p[3 * v as usize], p[3 * v as usize + 1], p[3 * v as usize + 2]);
-    for f in faces.chunks_exact(3) {
-        let n = (at(f[1]) - at(f[0])).cross(at(f[2]) - at(f[0]));
-        for &v in f {
-            let v = 3 * v as usize;
-            normals[v] += n.x;
-            normals[v + 1] += n.y;
-            normals[v + 2] += n.z;
-        }
-    }
-    for n in normals.chunks_exact_mut(3) {
-        let v = Vec3::new(n[0], n[1], n[2]).normalize_or_zero();
-        n.copy_from_slice(&v.to_array());
-    }
-    normals
-}
-
-fn unique_edges(faces: &[u32]) -> Vec<u32> {
-    let mut edges: Vec<(u32, u32)> = faces
-        .chunks_exact(3)
-        .flat_map(|f| [(f[0], f[1]), (f[1], f[2]), (f[2], f[0])])
-        .map(|(a, b)| (a.min(b), a.max(b)))
-        .collect();
-    edges.sort_unstable();
-    edges.dedup();
-    edges.into_iter().flat_map(|(a, b)| [a, b]).collect()
-}
-
 /// For each vertex, the faces around it, packed: faces[start[v]..start[v + 1]].
 struct VertexFaces {
     start: Vec<u32>,

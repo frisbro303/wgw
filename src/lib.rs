@@ -4,13 +4,13 @@
 
 #![cfg_attr(not(target_arch = "wasm32"), allow(dead_code))] // natively, only the parsers are built and tested
 
-mod array;
-mod io;
-
-// Drawing needs WebGL, so it's built for WebAssembly only; the rest (the data model, file parsing) is plain Rust,
-// tested natively with `cargo test`.
+// The scene itself (arrays, layers, mesh files, the camera, colors and lighting) is wgw-scene's, shared with the
+// SVG stills; this crate draws it with WebGL, so it's built for WebAssembly only.
 #[cfg(target_arch = "wasm32")]
-mod camera;
+use wgw_scene::{array, camera};
+
+#[cfg(target_arch = "wasm32")]
+mod io;
 #[cfg(target_arch = "wasm32")]
 mod gl;
 #[cfg(target_arch = "wasm32")]

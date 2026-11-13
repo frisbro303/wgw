@@ -38,7 +38,7 @@ const STYLE = `
 .wgw canvas,.wgw-controls{transition:opacity .3s}
 .wgw.wgw-loading canvas,.wgw.wgw-loading .wgw-controls{opacity:0;pointer-events:none}
 .wgw-credit{position:absolute;top:8px;right:10px;display:inline-flex;align-items:center;gap:4px;font:11px ui-monospace,monospace;color:inherit;opacity:.45;text-decoration:none}
-.wgw .wgw-credit img{width:12px;height:12px;background:none;padding:0;border:0;box-shadow:none}
+.wgw .wgw-credit img{width:12px;height:12px;background:none;padding:0;border:0;box-shadow:none;transform:translateY(.15em)}
 .wgw-credit:hover{opacity:.85;text-decoration:underline}
 .wgw-controls label{display:inline-flex;align-items:center;gap:8px;cursor:pointer;user-select:none}
 .wgw-controls output{font-variant-numeric:tabular-nums;text-align:right}
@@ -71,10 +71,11 @@ const formatter = (c) => {
   const decimals = Math.min(6, Math.max(0, -Math.floor(Math.log10(smallest) + 1e-9)));
   return (x) => (+x).toFixed(decimals);
 };
-// "turn,tilt" in degrees; a typographic minus (as Typst writes) reads as one, and anything unreadable as the default.
+// "turn,tilt" in degrees, then optionally a scale (2: twice as large); a typographic minus (as Typst writes) reads as
+// one, and anything unreadable as the default.
 const parseView = (text) => {
   const view = (text || "").split(",").map((x) => Number(x.trim().replace("\u2212", "-")));
-  return view.length === 2 && view.every(Number.isFinite) ? view : [-60, 20];
+  return (view.length === 2 || view.length === 3) && view.every(Number.isFinite) ? view : [-60, 20];
 };
 // How far along a slider is, for the filled part of its track.
 const fill = (input) => input.style.setProperty("--fill", `${((input.value - input.min) / (input.max - input.min)) * 100}%`);
@@ -115,6 +116,7 @@ export class Viewer {
     this.functions = [];
     this.pending = new Map();
     this.lastPick = null;
+    this.themed = {};  // layer colors that use CSS variables, by layer and parameter, re-read when the theme changes
     this.visible = false;
     this.ready = this.boot();
   }
@@ -126,7 +128,7 @@ export class Viewer {
     } catch (err) {
       return this.fail(err);
     }
-    this.core.set_options(this.options.up, this.options.view[0], this.options.view[1], REDUCED_MOTION.matches);
+    this.core.set_options(this.options.up, this.options.view[0], this.options.view[1], this.options.view[2] ?? 1, REDUCED_MOTION.matches);
     this.restyle();
     this.listen();
     this.canvas.addEventListener("webglcontextlost", (e) => { e.preventDefault(); this.status("graphics reset: reload the page"); });
@@ -190,7 +192,17 @@ export class Viewer {
     if (!this.core) return;
     const s = readStyle(this.el);
     this.core.set_style(s.colormap, s.accent, s.edge);
+    // Layer colors naming the page's CSS variables, such as "var(--link)", follow its theme.
+    for (const [name, keys] of Object.entries(this.themed)) {
+      for (const [key, value] of Object.entries(keys)) this.core.set_colors(name, key, rgbaList(this.resolve(value)));
+    }
     this.requestRender();
+  }
+
+  // Colors as given, with var(--name) read from the figure's CSS.
+  resolve(value) {
+    const style = getComputedStyle(this.el);
+    return [].concat(value).map((c) => c.replace(/var\((--[\w-]+)\)/g, (_, name) => style.getPropertyValue(name).trim()));
   }
 
   // ---- the scene
@@ -200,6 +212,7 @@ export class Viewer {
     if (!patch) return;
     const core = this.core;
     for (const [name, layer] of Object.entries(patch.layers || {})) {
+      delete this.themed[name];
       if (layer === null) { core.remove_layer(name); continue; }
       const arrays = layer.arrays || {};
       core.set_layer(name, layer.type);
@@ -213,7 +226,10 @@ export class Viewer {
       }
       for (const [key, value] of Object.entries(layer.params || {})) {
         if (typeof value === "number" || typeof value === "boolean") core.set_number(name, key, +value);
-        else if (typeof value === "string" || Array.isArray(value)) core.set_colors(name, key, rgbaList([].concat(value)));
+        else if (typeof value === "string" || Array.isArray(value)) {
+          if ([].concat(value).some((c) => c.includes("var("))) (this.themed[name] ??= {})[key] = value;
+          core.set_colors(name, key, rgbaList(this.resolve(value)));
+        }
       }
     }
     if (animates(patch)) core.play(performance.now(), this.fps || this.options.fps, !!this.loop, animate);
@@ -290,7 +306,7 @@ export class Viewer {
     const [layerIndex, index, x, y, z] = hit;
     const layer = this.core.layer_name(layerIndex);
     if (hovering && this.lastPick && this.lastPick.layer === layer && this.lastPick.index === index) return;
-    this.lastPick = { layer, index };
+    this.lastPick = { layer, index, point: [x, y, z] };
     this.el.dispatchEvent(new CustomEvent("wgw:pick", { detail: { layer, index, point: [x, y, z] } }));
     if (this.functions.includes("pick")) this.call("pick", !hovering);
   }
@@ -307,6 +323,7 @@ export class Viewer {
     this.fps = info.fps;
     this.loop = info.loop;
     this.core.set_grid(!!info.grid);
+    if (info.panes) this.core.set_pane_widths(Float32Array.from(info.panes));
     if (info.picked != null && this.lastPick === null) this.lastPick = { layer: "mesh", index: info.picked };  // the widget's starting pick
     this.buildControls(controlInputs(info.controls));
     this.apply(info.result, true);
@@ -364,7 +381,8 @@ export class Viewer {
     this.busy = true;
     try {
       const pick = this.lastPick || { index: null, layer: null };
-      this.apply(await this.runner.call(this.key, job.name, pick.index, pick.layer, { ...this.controls }), job.animate);
+      const where = { point: pick.point ?? null, frame: this.core.current_frame() };  // the exact spot, and when
+      this.apply(await this.runner.call(this.key, job.name, pick.index, pick.layer, { ...this.controls }, where), job.animate);
     } catch (err) {
       this.fail(err);
     }
