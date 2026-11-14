@@ -247,7 +247,7 @@ def _in_jupyter():
 
 def _program():
     found = os.environ.get("WGW_WINDOW") or shutil.which("wgw-window")
-    built = Path(__file__).resolve().parents[2] / "target" / "release" / "wgw-window"  # in wgw's repository
+    built = Path(__file__).resolve().parents[3] / "target" / "release" / "wgw-window"  # in wgw's repository
     if found or built.exists():
         return found or str(built)
     raise RuntimeError("wgw needs wgw-window: in wgw's repository, run ./build.sh, then "

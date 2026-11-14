@@ -51,8 +51,8 @@ PDF shows the figure's first frame, drawn by wgw's own renderer with the page's 
 
 ## Python, Julia, R, Lean and Rust
 
-The same figures in a window, from a program: [`python/`](python), [`julia/Wgw`](julia/Wgw), [`r/wgw`](r/wgw),
-[`lean/`](lean) and [`show/`](show) (Rust) are thin heads over `wgw-window` ([`window/`](window)), a small Rust
+The same figures in a window, from a program: the heads in [`heads/`](heads), for Python, Julia, R, Lean and Rust
+(`wgw-show`), are thin wrappers over `wgw-window` ([`window/`](window)), a small Rust
 program that shows each figure in a webview, running wgw's page code and core, and asks the head for a new scene
 when a slider moves or a point is picked. A figure is a `.wgw` file (a widget or a mesh), arrays as layers, or a
 function of the controls:
@@ -73,7 +73,7 @@ wgw_figure(function(s) list(mesh = wgw_mesh(vertices * s$t, faces)), list(t = wg
 ```
 
 In Rust, `wgw_show::Figure::widget(w).show()` runs a widget natively, the same code `cargo wgw` compiles to a
-`.wgw` file (`cargo run -p wgw-show --example torus`); `lean/Examples/Torus.lean` is the Lean version
+`.wgw` file (`cargo run -p wgw-show --example torus`); `heads/lean/Examples/Torus.lean` is the Lean version
 (`lake exe torus`). A window closes when its program ends, so a script waits on `show` until it's closed; Python's
 figures also show inline in Jupyter. Each release has `wgw-window` built for Linux, macOS and Windows; from the
 repository, `./build.sh` (it carries `dist/` inside), then `cargo install --path window`, or point `WGW_WINDOW` at

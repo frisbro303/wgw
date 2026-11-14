@@ -1,7 +1,7 @@
 # The R head against expected.json: Rscript r.R <out dir>. Faces and picks count from 1.
 args <- commandArgs(TRUE)
 here <- dirname(normalizePath(sub("--file=", "", grep("--file=", commandArgs(FALSE), value = TRUE))))
-source(file.path(here, "..", "..", "r", "wgw", "R", "wgw.R"))
+source(file.path(here, "..", "..", "heads", "r", "R", "wgw.R"))
 out <- args[1]
 scene <- list(m = wgw_mesh(matrix(c(0, 0, 0, 1, 0, 0, 0, 1, 0), 3, byrow = TRUE), matrix(1:3, 1), values = c(0, 0.5, 1), color = "red"),
               p = wgw_points(matrix(c(0, 0, 1), 1), size = 4))

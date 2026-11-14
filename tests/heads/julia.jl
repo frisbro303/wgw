@@ -1,5 +1,5 @@
 # The Julia head against expected.json: julia julia.jl <out dir>. Faces and picks count from 1.
-push!(LOAD_PATH, joinpath(@__DIR__, "..", "..", "julia", "Wgw"))
+push!(LOAD_PATH, joinpath(@__DIR__, "..", "..", "heads", "julia"))
 using Wgw
 out = ARGS[1]
 scene = Dict("m" => Mesh([0 0 0; 1 0 0; 0 1 0], [1 2 3]; values = [0, 0.5, 1], color = "red"),

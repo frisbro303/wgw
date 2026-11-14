@@ -10,11 +10,11 @@ figure until its window is closed.
 #table(
   columns: 3,
   [*head*], [*where*], [*shows / saves*],
-  [Python], [`python/`], [`Figure(...).show()`, inline in Jupyter / `save`],
-  [Julia], [`julia/Wgw`], [`display(Figure(...))`, inline in Jupyter and Pluto / `savefig`],
-  [R], [`r/wgw`], [printing a `wgw_figure(...)`, or `wgw_show` / `wgw_save`],
-  [Lean 4], [`lean/`], [`Figure.display` / `Figure.save`],
-  [Rust], [`show/` (wgw-show)], [`Figure::show` / `Figure::save`],
+  [Python], [`heads/python`], [`Figure(...).show()`, inline in Jupyter / `save`],
+  [Julia], [`heads/julia`], [`display(Figure(...))`, inline in Jupyter and Pluto / `savefig`],
+  [R], [`heads/r`], [printing a `wgw_figure(...)`, or `wgw_show` / `wgw_save`],
+  [Lean 4], [`heads/lean`], [`Figure.display` / `Figure.save`],
+  [Rust], [`heads/rust` (wgw-show)], [`Figure::show` / `Figure::save`],
 )
 
 ```python

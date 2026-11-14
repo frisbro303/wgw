@@ -32,7 +32,7 @@ headless/           wgw-headless: figures without a browser (the renderer on a C
                     and, as features, videos and running widgets; saving them to files
 window/             wgw-window: the heads' program: their protocol, figures in windows (webviews) or served, and
                     saves (by wgw-headless)
-show/, python/, julia/, r/, lean/   the heads: wgw-show (Rust), and Python, Julia, R and Lean
+heads/              the heads, each a thin wrapper over wgw-window: python, julia, r, lean, and rust (wgw-show)
 tests/heads/        what every head must do with the same input
 js/wgw.js           figures: the DOM, input, controls, applying patches
 js/widget.js        running widgets, and decoding their patches

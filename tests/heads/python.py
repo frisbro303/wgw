@@ -1,7 +1,7 @@
 # The Python head against expected.json: python3 python.py <out dir>
 import json, sys
 from pathlib import Path
-sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "python"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "heads" / "python"))
 import wgw
 
 out, fixture = Path(sys.argv[1]), json.loads((Path(__file__).parent / "expected.json").read_text())

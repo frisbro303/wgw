@@ -18,7 +18,7 @@ head() {  # name, the command it needs, then how to run it
 head python python3 python3 tests/heads/python.py
 head julia julia julia tests/heads/julia.jl
 head r Rscript Rscript tests/heads/r.R
-head lean lake sh -c 'cd lean && lake build -q wgw-test && .lake/build/bin/wgw-test "$0"'
+head lean lake sh -c 'cd heads/lean && lake build -q wgw-test && .lake/build/bin/wgw-test "$0"'
 head rust cargo cargo run -q -p wgw-show --example fixture --
 rm -rf "$out"
 
