@@ -485,9 +485,10 @@ export class Viewer {
     this.wanted = null;
     this.busy = true;
     try {
-      // An animation shows one frame as soon as it's built, while the rest are: the start, or (as a control
-      // moves) the frame on screen, so it changes in place.
-      const first = animate ? 0 : this.core.current_frame();
+      // An animation shows one frame as soon as it's built, while the rest are: the one it will go on from, so it
+      // changes in place. A loop carries on where it is (a click adds to it), so that's the frame on screen; one
+      // played once starts again from the start when animated (on a pick), and otherwise stays on the frame shown.
+      const first = animate && !this.loop ? 0 : this.core.current_frame();
       const state = { controls: { ...this.controls }, picks: this.picks };
       const patch = await this.widget.scene(state, this.frames, first, (one) => {
         if (this.destroyed) return;
