@@ -1,9 +1,9 @@
 [package]
 name = "wgw-widget"
-version = "0.1.0"
-edition = "2021"
+version.workspace = true
+edition.workspace = true
 description = "Write wgw widgets in Rust: a widget is a small WebAssembly module, with its data embedded, that a page runs live and a Typst document runs for its still."
 
 [dependencies]
-wgw-scene = { path = "../scene" }
-serde_json = "1"
+wgw-scene.workspace = true
+serde_json.workspace = true

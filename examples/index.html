@@ -15,9 +15,8 @@
 </head>
 <body>
 <h1>wgw</h1>
-<p>Drag to turn, pinch or ctrl+scroll to zoom, double-click to reset. Build the torus widget first
-(examples/torus: <code>cargo build --release --target wasm32-unknown-unknown</code>, then copy its .wasm to
-torus.wgw).</p>
+<p>Drag to turn, pinch or ctrl+scroll to zoom, double-click to reset. Build the torus widget first:
+<code>cargo wgw -p torus</code>, which writes examples/torus.wgw.</p>
 
 <h2>A widget: a torus colored by its curvature, reshaped by sliders</h2>
 <div class="wgw" id="curvature" data-src="torus.wgw" data-view="-60,35"></div>

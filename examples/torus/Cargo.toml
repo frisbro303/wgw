@@ -1,20 +1,14 @@
 [package]
 name = "torus"
-version = "0.1.0"
-edition = "2021"
+version.workspace = true
+edition.workspace = true
 publish = false
 
 [lib]
 crate-type = ["cdylib"]
 
 [dependencies]
-wgw-widget = { path = "../../widget" }
-
-[profile.release]
-opt-level = "s"
-lto = true
-strip = true
-panic = "abort"
+wgw-widget.workspace = true
 
 [package.metadata.wgw]
 out = "../torus.wgw"

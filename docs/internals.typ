@@ -56,9 +56,9 @@ docs/               these docs, as Typst pages for tdg
 = Building and testing
 
 ```sh
-./build.sh [folder]                              # wasm-pack builds the core into dist/core; the JS beside it
-cargo test --manifest-path scene/Cargo.toml       # the file formats, natively
-cd examples/torus && cargo build --release --target wasm32-unknown-unknown   # the example widget
+./build.sh [folder]     # the core into dist/core (cargo, wasm-bindgen, wasm-opt); the JS beside it
+cargo test              # every crate, natively
+cargo wgw -p torus      # the example widget, examples/torus.wgw
 ```
 
 The examples page (`examples/index.html`) loads `dist/` and `examples/torus.wgw` (the built torus widget). There

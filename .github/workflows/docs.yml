@@ -21,14 +21,15 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - run: rustup target add wasm32-unknown-unknown
-      - run: cargo test --manifest-path scene/Cargo.toml
-      - run: cargo build --manifest-path still/Cargo.toml
-      - run: cargo install wasm-pack --locked
+      - run: cargo test
+      - name: Install wasm-bindgen (the version in Cargo.lock) and wasm-opt
+        run: |
+          cargo install wasm-bindgen-cli --locked --version "$(grep -A1 '^name = "wasm-bindgen"$' Cargo.lock | sed -n 's/^version = "\(.*\)"$/\1/p')"
+          curl -sL https://github.com/WebAssembly/binaryen/releases/download/version_133/binaryen-version_133-x86_64-linux.tar.gz | tar xz -C /tmp
+          echo /tmp/binaryen-version_133/bin >> "$GITHUB_PATH"
       - run: ./build.sh
       - name: Build the example widget
-        run: |
-          cd examples/torus && cargo build --release --target wasm32-unknown-unknown
-          cp target/wasm32-unknown-unknown/release/torus.wasm ../torus.wgw
+        run: cargo run -p cargo-wgw -- -p torus
       - uses: typst-community/setup-typst@v5
         with:
           typst-version: 0.15.0

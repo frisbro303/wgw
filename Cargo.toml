@@ -1,8 +1,28 @@
-[package]
-name = "wgw"
+[workspace]
+members = ["scene", "render", "still", "widget", "cargo-wgw", "examples/torus"]
+# Widgets import their host's functions, so they only link for wasm32: `cargo wgw` builds them.
+default-members = [".", "scene", "render", "still", "widget", "cargo-wgw"]
+resolver = "2"
+
+[workspace.package]
 version = "0.1.0"
 edition = "2021"
-description = "Interactive meshes, points, curves and vector fields in WebGL2, driven by widgets in Python, JS or anything that returns arrays."
+
+[workspace.dependencies]
+wgw-scene = { path = "scene" }
+wgw-render = { path = "render" }
+wgw-widget = { path = "widget" }
+glam = "0.30"
+bytemuck = "1"
+naga = "26"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+[package]
+name = "wgw"
+version.workspace = true
+edition.workspace = true
+description = "Interactive meshes, points, curves and vector fields on web pages: wgw's renderer on WebGL2, compiled to WebAssembly, driven by widgets written in Rust."
 
 [lib]
 crate-type = ["cdylib", "rlib"]
@@ -12,14 +32,20 @@ wasm-bindgen = "0.2"
 web-sys = { version = "0.3", features = ["HtmlCanvasElement", "WebGl2RenderingContext"] }
 js-sys = "0.3"
 glow = "0.16"
-wgw-scene = { path = "scene" }
-wgw-render = { path = "render" }
-glam = "0.30"
-bytemuck = "1"
-serde = { version = "1", features = ["derive"] }
-serde_json = "1"
+wgw-scene.workspace = true
+wgw-render.workspace = true
+glam.workspace = true
+bytemuck.workspace = true
+serde.workspace = true
+serde_json.workspace = true
 
+# For the page's core, the widgets and wgw-still alike: small, and a panic stops the module (a widget reports its
+# message first, see wgw-widget's `export!`). Not stripped: wasm-bindgen reads the core's target features section.
 [profile.release]
 opt-level = "s"
 lto = true
 codegen-units = 1
+panic = "abort"
+
+[profile.release.package.torus]
+strip = true

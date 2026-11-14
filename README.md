@@ -51,13 +51,15 @@ PDF shows the figure's first frame, drawn by wgw's own renderer with the page's 
 
 ## Build
 
-Needs Rust with the `wasm32-unknown-unknown` target and [wasm-pack](https://github.com/wasm-bindgen/wasm-pack).
+Needs Rust with the `wasm32-unknown-unknown` target, `wasm-bindgen-cli` at the version in `Cargo.lock` (`build.sh`
+says which), and optionally `wasm-opt` from [binaryen](https://github.com/WebAssembly/binaryen) for a smaller core.
+The version is set once, in `Cargo.toml`.
 
 ```sh
 ./build.sh                     # -> dist/
 ./build.sh ../site/theme/wgw   # ... and copy it into a site
 cargo install --path cargo-wgw                       # cargo wgw: builds widgets into .wgw files
-cargo wgw --manifest-path examples/torus/Cargo.toml   # the example widget -> examples/torus.wgw
+cargo wgw -p torus                                   # the example widget -> examples/torus.wgw
 python3 -m http.server         # examples at http://localhost:8000/examples/
 ```
 

@@ -31,8 +31,8 @@ frame, drawn by wgw's own renderer with the page's shaders:
 = Getting it
 
 wgw isn't on a package registry yet: build it from #link("https://github.com/frisbro303/wgw")[the repository],
-which needs Rust with the `wasm32-unknown-unknown` target, and
-#link("https://github.com/wasm-bindgen/wasm-pack")[wasm-pack].
+which needs Rust with the `wasm32-unknown-unknown` target, `wasm-bindgen-cli` at the version in `Cargo.lock`
+(`build.sh` says which), and optionally `wasm-opt` from #link("https://github.com/WebAssembly/binaryen")[binaryen].
 
 ```sh
 ./build.sh                     # -> dist/

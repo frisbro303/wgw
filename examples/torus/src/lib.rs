@@ -1,5 +1,5 @@
 //! A torus colored by its Gaussian curvature; the sliders reshape it. Build it with
-//! `cargo build --release --target wasm32-unknown-unknown`, and use the .wasm as the figure's .wgw file.
+//! `cargo wgw -p torus`, which writes examples/torus.wgw.
 
 use std::f32::consts::TAU;
 use wgw_widget::*;

@@ -1,23 +1,17 @@
 [package]
 name = "wgw-still"
-version = "0.1.0"
-edition = "2021"
+version.workspace = true
+edition.workspace = true
 description = "wgw figures as images without a browser: a figure's scene drawn by wgw-render on a CPU GL, with the same shaders as the page"
 
 [lib]
 crate-type = ["rlib"]
 
 [dependencies]
-wgw-scene = { path = "../scene" }
-wgw-render = { path = "../render" }
-naga = { version = "26", features = ["wgsl-in"] }
+wgw-scene.workspace = true
+wgw-render.workspace = true
+naga = { workspace = true, features = ["wgsl-in"] }
 png = "0.17"
-glam = "0.30"
-serde = { version = "1", features = ["derive"] }
-serde_json = "1"
-
-[profile.release]
-opt-level = "s"
-lto = true
-codegen-units = 1
-strip = true
+glam.workspace = true
+serde.workspace = true
+serde_json.workspace = true
