@@ -13,7 +13,8 @@
 // curves and arrows without values), --wgw-edge, --wgw-height.
 //
 // From JS: WGW.mount(element, options) returns the viewer: viewer.on("pick", fn), viewer.apply(patch),
-// viewer.reset(), viewer.destroy(); WGW.unmount(element) destroys an element's viewer.
+// viewer.reset(), viewer.destroy(); WGW.unmount(element) destroys an element's viewer. options.widget gives the
+// figure a widget directly, such as WGW.remoteWidget(url, setup), whose scenes a server makes (wgw for Python).
 //
 // Every figure draws with one WebGL context (browsers keep only about 16 alive), on a canvas kept off the page:
 // a figure draws into its lower left corner, then copies that onto its own canvas. If the context is lost (the GPU
@@ -25,7 +26,7 @@
 import init, { Gpu, Viewer as Core } from "./core/wgw_core.js";
 import { fetchBytes, parseMesh } from "./io.js";
 import { animates, controlInputs } from "./patch.js";
-import { isWidget, loadWidget } from "./widget.js";
+import { isWidget, loadWidget, remoteWidget } from "./widget.js";
 import { readStyle, rgbaList } from "./style.js";
 
 let wasm = null;
@@ -134,6 +135,7 @@ export class Viewer {
       fps: +(options.fps ?? d.fps ?? 30),
       flat: options.flat ?? flag(d.flat),
       credit: options.credit ?? d.credit !== "false",
+      widget: options.widget,
     };
     el.wgw = this;
     el.classList.add("wgw", "wgw-loading");  // nothing shows until the mesh, the widget and its first results are in
@@ -196,6 +198,7 @@ export class Viewer {
   async start() {
     const o = this.options;
     try {
+      if (o.widget) return this.useWidget(o.widget);
       if (o.src) {
         const bytes = await fetchBytes(o.src);
         if (this.destroyed) return;
@@ -417,6 +420,11 @@ export class Viewer {
   async startWidget(bytes) {
     const widget = await loadWidget(bytes);
     if (this.destroyed) return widget.terminate();
+    this.useWidget(widget);
+  }
+
+  // A widget: {setup, scene(state, frames, first, onFirst), cancel(), terminate()}, as loadWidget gives.
+  useWidget(widget) {
     this.widget = widget;
     const info = widget.setup;
     this.frames = Math.max(1, info.frames || 1);
@@ -524,4 +532,4 @@ function autoload() {
 
 if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", autoload); else autoload();
 
-window.WGW = { mount, unmount, Viewer, loadWidget, version: "__WGW_VERSION__" };  // the version: build.sh writes it in, from Cargo.toml
+window.WGW = { mount, unmount, Viewer, loadWidget, remoteWidget, version: "__WGW_VERSION__" };  // the version: build.sh writes it in, from Cargo.toml

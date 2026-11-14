@@ -82,6 +82,29 @@ export async function loadWidget(bytes, mesh) {
   };
 }
 
+// A widget whose scenes a server makes (wgw for Python): `setup` as given, and each scene the patch's bytes in
+// answer to the state, POSTed to `url` as JSON; an error's text is the response to a failed request. Cancelling
+// drops the request (the server still finishes it).
+export function remoteWidget(url, setup) {
+  let request = null;
+  return {
+    setup,
+    async scene(state) {
+      const mine = (request = new AbortController());
+      try {
+        const res = await fetch(url, { method: "POST", body: JSON.stringify(state), signal: mine.signal });
+        if (!res.ok) throw new Error((await res.text()) || `${url}: HTTP ${res.status}`);
+        return decodePatch(new Uint8Array(await res.arrayBuffer()));
+      } catch (err) {
+        if (mine.signal.aborted) return null;
+        throw err;
+      }
+    },
+    cancel: () => request?.abort(),
+    terminate: () => request?.abort(),
+  };
+}
+
 // A widget module from its bytes, with its two functions as calls on byte arrays (in the worker). A panic stops
 // the module mid-call (its memory left as it was), so the next call starts a fresh instance, given the mesh again.
 // wgw-widget sends a panic's message before stopping; that's the error, rather than "unreachable".
