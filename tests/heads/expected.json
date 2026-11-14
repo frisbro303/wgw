@@ -1,0 +1,14 @@
+{
+  "about": "What every head must do with the same input (tests/heads/README.md). Arrays are row-major; indices are as the head's language counts (faces and picks from 1 in Julia and R).",
+  "patch": {
+    "m": {"type": "mesh", "params": {"color": "red"}, "arrays": {
+      "vertices": {"dtype": "f4", "shape": [3, 3], "data": [0, 0, 0, 1, 0, 0, 0, 1, 0]},
+      "faces": {"dtype": "u4", "shape": [1, 3], "data": [0, 1, 2]},
+      "values": {"dtype": "f4", "shape": [3], "data": [0, 0.5, 1]}}},
+    "p": {"type": "points", "params": {"size": 4}, "arrays": {
+      "vertices": {"dtype": "f4", "shape": [1, 3], "data": [0, 0, 1]}}}
+  },
+  "state": "control 2.5 t\ncontrol true my box\npick 3 1 0.5 0 1 the mesh\n",
+  "values": {"t": 2.5, "my box": true},
+  "pick": {"vertex": 3, "frame": 1, "point": [0.5, 0, 1], "layer": "the mesh"}
+}

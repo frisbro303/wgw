@@ -1,0 +1,40 @@
+# Test wgw on every push and pull request: the Rust crates, wgw-window (built without windows, so headless: it
+# saves and serves), and every head (Python, Julia, R, Lean, Rust) against the same input (tests/heads/).
+name: Test
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - run: rustup target add wasm32-unknown-unknown
+      - run: cargo test
+      - name: Install wasm-bindgen (the version in Cargo.lock) and wasm-opt
+        run: |
+          cargo install wasm-bindgen-cli --locked --version "$(grep -A1 '^name = "wasm-bindgen"$' Cargo.lock | sed -n 's/^version = "\(.*\)"$/\1/p')"
+          curl -sL https://github.com/WebAssembly/binaryen/releases/download/version_133/binaryen-version_133-x86_64-linux.tar.gz | tar xz -C /tmp
+          echo /tmp/binaryen-version_133/bin >> "$GITHUB_PATH"
+      - run: ./build.sh
+      - name: wgw-window, headless
+        run: |
+          cargo build --release -p wgw-window --no-default-features
+          cargo test -p wgw-window --no-default-features
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+      - run: pip install numpy
+      - uses: julia-actions/setup-julia@v3
+      - uses: r-lib/actions/setup-r@v2
+      - name: Install Lean (elan)
+        run: |
+          curl -sSf https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y --default-toolchain none
+          echo "$HOME/.elan/bin" >> "$GITHUB_PATH"
+      - name: Every head
+        run: REQUIRE_ALL=1 tests/heads/run.sh
