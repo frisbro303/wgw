@@ -1,5 +1,5 @@
 //! wgw's scene, apart from any renderer: named arrays, layers and their parameters, mesh files, the orbit camera
-//! and how a scene is framed. wgw-render draws it, with WebGL on a page or on the CPU for stills (wgw-still).
+//! and how a scene is framed. wgw-render draws it, with WebGL on a page or on the CPU for stills (wgw-headless).
 
 pub mod array;
 pub mod camera;

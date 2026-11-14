@@ -1,7 +1,7 @@
 [workspace]
-members = ["scene", "render", "still", "widget", "cargo-wgw", "examples/torus"]
+members = ["scene", "render", "headless", "widget", "cargo-wgw", "examples/torus"]
 # Widgets import their host's functions, so they only link for wasm32: `cargo wgw` builds them.
-default-members = [".", "scene", "render", "still", "widget", "cargo-wgw"]
+default-members = [".", "scene", "render", "headless", "widget", "cargo-wgw"]
 resolver = "2"
 
 [workspace.package]
@@ -39,7 +39,7 @@ bytemuck.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 
-# For the page's core, the widgets and wgw-still alike: small, and a panic stops the module (a widget reports its
+# For the page's core, the widgets and wgw-headless alike: small, and a panic stops the module (a widget reports its
 # message first, see wgw-widget's `export!`). Not stripped: wasm-bindgen reads the core's target features section.
 [profile.release]
 opt-level = "s"

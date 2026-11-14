@@ -335,6 +335,11 @@ impl Renderer {
         self.pane_widths = widths;
     }
 
+    /// How many frames the scene's animation has (1 for none).
+    pub fn frame_count(&self) -> usize {
+        self.layers.iter().map(|l| l.data.frames()).max().unwrap_or(1)
+    }
+
     /// The animation frame on screen, so a widget can start something new in step with what's playing.
     pub fn current_frame(&self) -> u32 {
         self.frame as u32

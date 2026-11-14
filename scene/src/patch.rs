@@ -103,6 +103,44 @@ pub fn decode(bytes: &[u8]) -> Result<Patch, String> {
     Ok(patch)
 }
 
+/// Frames' patches as one: each array gets a leading frames axis (faces and segments, the same in every frame, are
+/// taken from the first), as the page does (stackFrames in js/widget.js). A layer only frame 0 has is the same in every frame.
+pub fn stack(mut patches: Vec<Patch>) -> Patch {
+    if patches.len() == 1 {
+        return patches.pop().unwrap();
+    }
+    let mut out = Patch::default();
+    for (name, layer) in &patches[0].layers {
+        let Some(layer) = layer else {
+            out.layers.push((name.clone(), None));
+            continue;
+        };
+        let later = |p: &Patch| p.layers.iter().find(|(n, _)| n == name).and_then(|(_, l)| l.clone());
+        if later(&patches[1]).is_none() {
+            out.layers.push((name.clone(), Some(layer.clone()))); // unchanging: sent once
+            continue;
+        }
+        let mut stacked = layer.clone();
+        for (key, array) in &mut stacked.arrays {
+            if key == "faces" || key == "segments" {
+                continue;
+            }
+            let mut data = Vec::new();
+            for p in &patches {
+                if let Some(Data::F32(v)) = later(p).and_then(|l| l.arrays.into_iter().find(|(k, _)| k == key)).map(|(_, a)| a.data) {
+                    data.extend(v);
+                }
+            }
+            let shape = [vec![patches.len()], array.shape.clone()].concat();
+            if let Ok(a) = NdArray::new(Data::F32(data), shape) {
+                *array = a;
+            }
+        }
+        out.layers.push((name.clone(), Some(stacked)));
+    }
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

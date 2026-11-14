@@ -1,0 +1,24 @@
+[package]
+name = "wgw-headless"
+version.workspace = true
+edition.workspace = true
+description = "wgw figures without a browser, as images and videos: a figure's scene drawn by wgw-render on a CPU GL, with the same shaders as the page"
+
+[lib]
+crate-type = ["rlib"]
+
+[dependencies]
+wgw-scene.workspace = true
+wgw-render.workspace = true
+naga = { workspace = true, features = ["wgsl-in"] }
+png = "0.17"
+glam.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+gif = { version = "0.14.2", optional = true }
+wasmi = { version = "2.0.0", optional = true }
+
+[features]
+# Off by default: tdg's Typst plugin only wants stills (it runs widgets itself, as Typst plugins).
+video = ["dep:gif"]
+widgets = ["dep:wasmi"]
