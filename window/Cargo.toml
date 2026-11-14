@@ -1,0 +1,22 @@
+[package]
+name = "wgw-window"
+description = "wgw's figures for its heads (Python, Julia, R, Lean, Rust): in a window, served (for Jupyter), or saved headless as images and videos."
+version.workspace = true
+edition.workspace = true
+publish = false
+
+[dependencies]
+serde_json.workspace = true
+tao = { version = "0.37.2", optional = true }
+tiny_http = "0.12.0"
+wgw-headless = { path = "../headless", features = ["video", "widgets"] }
+wry = { version = "0.57.2", optional = true }
+
+[dev-dependencies]
+wgw-scene.workspace = true
+
+[features]
+# Windows with webviews (tao, wry: GTK's WebKit on Linux). Without it, wgw-window saves and serves, headless.
+default = ["window"]
+window = ["dep:tao", "dep:wry"]
+

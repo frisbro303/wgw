@@ -1,5 +1,5 @@
 [workspace]
-members = ["scene", "render", "headless", "widget", "cargo-wgw", "examples/torus"]
+members = ["scene", "render", "headless", "widget", "cargo-wgw", "examples/torus", "window"]
 # Widgets import their host's functions, so they only link for wasm32: `cargo wgw` builds them.
 default-members = [".", "scene", "render", "headless", "widget", "cargo-wgw"]
 resolver = "2"
