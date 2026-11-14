@@ -7,7 +7,9 @@
   columns: 2,
   [*member*], [],
   [`WGW.mount(element, options)`], [make an element a figure (or get its figure); returns it],
-  [`WGW.loadWidget(bytes)`], [a widget module, with its `setup(mesh)` and `scene(mesh, state)` as functions],
+  [`WGW.loadWidget(bytes)`], [a widget module, run on one of the page's widget workers: its `setup` (as given);
+    `scene(state, frames, first, onFirst)`, a promise of the patch of every frame (`onFirst` gets frame `first` alone
+    as soon as it's built; `null` if cancelled); `cancel()`; and `terminate()`],
 )
 
 `options` are the #link("/figures/#attributes")[attributes] without `data-`: `src`, `up`, `view`

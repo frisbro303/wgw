@@ -365,9 +365,11 @@ export class Viewer {
 
   // Ask the widget for its scene in the current state (every frame of an animation, stacked), at most one at a
   // time: while it's busy, newer requests collapse into one, so dragging a slider never builds up a backlog.
+  // An animation's frames for a state that's moved on are cancelled, so the newer one starts sooner.
   update(animate) {
     this.wanted = { animate: animate || this.wanted?.animate };
     if (!this.busy) this.flush();
+    else if (this.frames > 1) this.widget?.cancel();
   }
 
   async flush() {
@@ -376,8 +378,18 @@ export class Viewer {
     this.wanted = null;
     this.busy = true;
     try {
-      const patch = await this.widget.scene({ controls: { ...this.controls }, picks: this.picks }, this.frames);
-      this.apply(patch, animate);
+      // An animation shows one frame as soon as it's built, while the rest are: the start, or (as a control
+      // moves) the frame on screen, so it changes in place.
+      const first = animate ? 0 : this.core.current_frame();
+      const state = { controls: { ...this.controls }, picks: this.picks };
+      const patch = await this.widget.scene(state, this.frames, first, (one) => {
+        this.apply(one, false);
+        if (this.revealWhenIdle) this.reveal();
+      });
+      if (patch) {
+        if (this.statusEl.textContent.startsWith("error")) this.status("");  // the widget's working again
+        this.apply(patch, animate);
+      } else this.wanted = { animate: animate || this.wanted?.animate };  // cancelled: what's wanted now, still
     } catch (err) {
       this.fail(err);
     }

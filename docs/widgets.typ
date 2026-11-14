@@ -49,6 +49,9 @@ out = "../../figures/{dir}.wgw"
   the picks (`state.pick()`, `state.picks`) and the animation frame (`state.frame`). It's called at the start and
   whenever a control or a pick changes; it returns every layer it shows.
 
+A panic in either shows on the figure as its message (`error: ...`), and the page starts the widget afresh for its
+next scene.
+
 = Layers
 
 A scene is layers by name: `Scene::new().layer("name", layer)`, or `.remove("name")`. Each kind is built from its
@@ -96,6 +99,10 @@ layer `mesh` picked, so the figure opens showing something; `Setup::keep_picks()
 page plays them in a loop (`.fps(20.0)`, or `.once()`). A still draws frame 0 alone, so widgets never build frames
 they don't need. A layer that a later frame leaves out stays as it is in frame 0: give what never changes (a
 sphere, a grid) with frame 0 only, and it's sent once. Scenes are built in a worker, off the page's thread.
+
+The page shows one frame as soon as it's built, while the rest are: frame 0 at the start and on a pick, and the
+frame on screen as a control moves, so the figure changes in place. If the control moves again before the frames
+are done, they're dropped for the newer state's.
 
 = Panes
 

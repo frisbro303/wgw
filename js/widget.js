@@ -8,34 +8,87 @@
 // keeps it). An animation is frames: scene is asked for each, and they're stacked into arrays with a frames axis. A
 // layer a later frame leaves out stays as it is in frame 0, so what never changes is sent once.
 //
-// The widget runs in a worker (widget-worker.js), so building scenes never holds up the page.
+// Widgets run in workers (widget-worker.js), so building scenes never holds up the page: a few workers, shared by
+// the page's widgets, so a page of many figures doesn't start many. A widget's long work (an animation's frames)
+// pauses between frames, so the others on its worker carry on, and so it can be cancelled.
 
 const text = new TextDecoder(), utf8 = new TextEncoder();
 
-// A widget run in a worker: `setup` (given at load) and `scene(state, frames)`, which resolves to the patch of
-// every frame, stacked.
-export async function loadWidget(bytes, mesh) {
-  const worker = new Worker(new URL("widget-worker.js", import.meta.url), { type: "module" });
-  const waiting = new Map();
-  let next = 0;
-  worker.onmessage = ({ data }) => {
-    const [resolve, reject] = waiting.get(data.id);
-    waiting.delete(data.id);
-    if (data.error !== undefined) reject(new Error(data.error)); else resolve(data.result);
+const POOL = Math.max(1, Math.min(4, (globalThis.navigator?.hardwareConcurrency || 2) - 1));
+const workers = [];  // each: {worker, widgets (how many it hosts), waiting (requests by id)}
+let nextRequest = 0, nextWidget = 0;
+
+function startWorker() {
+  const w = { worker: new Worker(new URL("widget-worker.js", import.meta.url), { type: "module" }), widgets: 0, waiting: new Map() };
+  w.worker.onmessage = ({ data }) => {
+    const request = w.waiting.get(data.id);
+    if (!request) return;  // its widget was stopped
+    if ("partial" in data) return request.partial?.(data.partial);
+    w.waiting.delete(data.id);
+    if (data.error !== undefined) request.reject(new Error(data.error)); else request.resolve(data.result);
   };
-  const ask = (message, transfer = []) => new Promise((resolve, reject) => {
-    const id = next++;
-    waiting.set(id, [resolve, reject]);
-    worker.postMessage({ ...message, id }, transfer);
-  });
-  const setup = await ask({ type: "load", bytes, mesh: mesh || null });
-  return { setup, scene: (state, frames) => ask({ type: "scene", state, frames, mesh: null }) };
+  // If the worker can't start, everything waiting on it is rejected, so nothing hangs.
+  w.worker.onerror = (e) => {
+    for (const request of w.waiting.values()) request.reject(new Error(e.message || "the widgets' worker failed to start"));
+    w.waiting.clear();
+  };
+  workers.push(w);
+  return w;
 }
 
-// A widget module from its bytes, with its two functions as calls on byte arrays (in the worker).
+// The worker with the fewest widgets, or a new one while the pool has room and every worker is busy.
+function pickWorker() {
+  const least = workers.reduce((a, b) => (b.widgets < a.widgets ? b : a), workers[0]);
+  return !least || (least.widgets > 0 && workers.length < POOL) ? startWorker() : least;
+}
+
+// A widget, on one of the page's workers:
+//   setup                               what the widget said about itself
+//   scene(state, frames, first, onFirst) resolves to the patch of every frame, stacked; for an animation, onFirst
+//                                       gets frame `first` alone as soon as it's built, to show while the rest are.
+//                                       Resolves to null if cancelled.
+//   cancel()                            stop building the scene asked for (an animation's frames are left)
+//   terminate()                         drop the widget, rejecting anything it was asked
+export async function loadWidget(bytes, mesh) {
+  const w = pickWorker(), widget = nextWidget++;
+  w.widgets++;
+  const ask = (message, partial) => new Promise((resolve, reject) => {
+    const id = nextRequest++;
+    w.waiting.set(id, { resolve, reject, partial, widget });
+    w.worker.postMessage({ ...message, id, widget });
+  });
+  let stopped = false;
+  const terminate = () => {
+    if (stopped) return;
+    stopped = true;
+    w.worker.postMessage({ type: "drop", widget });
+    for (const [id, request] of w.waiting) {
+      if (request.widget === widget) { request.reject(new Error("the widget was stopped")); w.waiting.delete(id); }
+    }
+    if (--w.widgets === 0) { w.worker.terminate(); workers.splice(workers.indexOf(w), 1); }
+  };
+  let setup;
+  try {
+    setup = await ask({ type: "load", bytes, mesh: mesh || null });
+  } catch (err) {
+    terminate();
+    throw err;
+  }
+  return {
+    setup,
+    scene: (state, frames, first = 0, onFirst) => ask({ type: "scene", state, frames, first, mesh: null }, onFirst),
+    cancel: () => { if (!stopped) w.worker.postMessage({ type: "cancel", widget }); },
+    terminate,
+  };
+}
+
+// A widget module from its bytes, with its two functions as calls on byte arrays (in the worker). A panic stops
+// the module mid-call (its memory left as it was), so the next call starts a fresh instance, given the mesh again.
+// wgw-widget sends a panic's message before stopping; that's the error, rather than "unreachable".
 export async function instantiate(bytes) {
-  let args = new Uint8Array(0), result = null;
-  let memory;
+  const module = await WebAssembly.compile(bytes);
+  const empty = new Uint8Array(0);
+  let args = empty, result = null, instance = null, memory, kept = empty;
   const env = {
     wasm_minimal_protocol_write_args_to_buffer(ptr) {
       new Uint8Array(memory.buffer, ptr, args.length).set(args);
@@ -44,22 +97,35 @@ export async function instantiate(bytes) {
       result = new Uint8Array(memory.buffer, ptr, len).slice();
     },
   };
-  const { instance } = await WebAssembly.instantiate(bytes, { typst_env: env });
-  memory = instance.exports.memory;
+  // The mesh for a call: as given, or, for a fresh instance, the last one given.
+  const meshFor = (mesh) => {
+    if (mesh && mesh.length) kept = mesh;
+    return instance ? mesh || empty : kept;
+  };
   const call = (name, ...parts) => {
+    if (!instance) {
+      instance = new WebAssembly.Instance(module, { typst_env: env });
+      memory = instance.exports.memory;
+    }
     const fn = instance.exports[name];
     if (typeof fn !== "function") throw new Error(`the widget has no ${name}()`);
     args = new Uint8Array(parts.reduce((n, p) => n + p.length, 0));
     let at = 0;
     for (const p of parts) { args.set(p, at); at += p.length; }
     result = null;
-    const code = fn(...parts.map((p) => p.length));
-    if (code !== 0) throw new Error(text.decode(result || new Uint8Array()));
+    let code;
+    try {
+      code = fn(...parts.map((p) => p.length));
+    } catch (err) {
+      instance = null;
+      throw new Error(result ? text.decode(result) : `the widget stopped: ${err.message}`);
+    }
+    if (code !== 0) throw new Error(text.decode(result || empty));
     return result;
   };
   return {
-    setup: (mesh) => JSON.parse(text.decode(call("setup", mesh || new Uint8Array()))),
-    scene: (mesh, state) => call("scene", mesh || new Uint8Array(), utf8.encode(JSON.stringify(state))),
+    setup: (mesh) => JSON.parse(text.decode(call("setup", meshFor(mesh)))),
+    scene: (mesh, state) => call("scene", meshFor(mesh), utf8.encode(JSON.stringify(state))),
   };
 }
 

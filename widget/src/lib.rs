@@ -510,6 +510,17 @@ pub mod runtime {
         code
     }
 
+    /// On a panic, send its message to the host before the module stops (widgets build with `panic = "abort"`), so
+    /// the page shows it rather than "unreachable".
+    pub fn report_panics() {
+        static ONCE: std::sync::Once = std::sync::Once::new();
+        ONCE.call_once(|| {
+            std::panic::set_hook(Box::new(|info| {
+                send(Err(format!("the widget {info}")));
+            }))
+        });
+    }
+
     /// The widget, built once per mesh and kept: a page calls `scene` many times with the same mesh (or none, to
     /// mean the same as before).
     pub fn with<W: Widget, R>(cell: &'static std::thread::LocalKey<RefCell<Option<(u64, W)>>>, mesh: &[u8], f: impl FnOnce(&W) -> R) -> Result<R, String> {
@@ -569,12 +580,14 @@ macro_rules! export {
 
         #[no_mangle]
         pub extern "C" fn setup(mesh_len: usize) -> i32 {
+            $crate::runtime::report_panics();
             let args = $crate::runtime::args(&[mesh_len]);
             $crate::runtime::send($crate::runtime::with(&WIDGET, &args[0], |w: &$widget| $crate::runtime::setup(w)))
         }
 
         #[no_mangle]
         pub extern "C" fn scene(mesh_len: usize, state_len: usize) -> i32 {
+            $crate::runtime::report_panics();
             let args = $crate::runtime::args(&[mesh_len, state_len]);
             $crate::runtime::send($crate::runtime::with(&WIDGET, &args[0], |w: &$widget| $crate::runtime::scene(w, &args[1])).and_then(|r| r))
         }

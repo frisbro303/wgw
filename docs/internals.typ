@@ -47,8 +47,9 @@ docs/               these docs, as Typst pages for tdg
 
 - Figures draw only when something changes (input, new data, animation, a glide), and only while on screen.
 - The mesh file is parsed in the core and drawn before any widget starts.
-- Widgets are WebAssembly, run on the page. A newer request replaces a waiting one; a patch's arrays are viewed
-  in place, not copied.
+- Widgets are WebAssembly, run in a few workers shared by the page's widgets. A newer request replaces a waiting
+  one, and cancels an animation's frames still being built; the first frame is sent ahead of the rest. A patch's
+  arrays are viewed in place, and transferred from the worker, not copied.
 - A mesh's faces (and grid) go to the GPU only when they change, not with each new set of values.
 - Picking draws one scissored pixel of (layer, element) ids, then refines on the CPU, testing only the triangles
   around the hit.
