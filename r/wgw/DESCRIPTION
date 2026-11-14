@@ -1,0 +1,7 @@
+Package: wgw
+Title: Interactive 3D Figures of Arrays and wgw Widgets
+Version: 0.1.0
+Description: wgw for R: meshes, points, curves and vector fields in a window, drawn by wgw's WebAssembly core
+    through wgw-window, with sliders and picks that call R functions. Needs wgw-window from wgw's repository.
+License: MIT
+Encoding: UTF-8

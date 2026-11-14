@@ -1,0 +1,4 @@
+export(wgw_figure, wgw_show, wgw_save, wgw_mesh, wgw_points, wgw_lines, wgw_vectors, wgw_slider, wgw_pick, wgw_encode)
+S3method(print, wgw_figure)
+S3method("[[", wgw_state)
+S3method("$", wgw_state)
