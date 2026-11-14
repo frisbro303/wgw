@@ -1,12 +1,43 @@
-//! The Viewer the page talks to: wgw-render's Renderer, drawing with WebGL on the figure's canvas.
+//! What the page talks to: a `Gpu`, the one WebGL context a page's figures share, and a `Viewer` per figure,
+//! wgw-render's Renderer drawing on it. A figure draws into the shared canvas's lower left corner and the page
+//! copies that onto its own canvas, so a page can have any number of figures (browsers keep only about 16 WebGL
+//! contexts alive at once).
+
+use std::rc::Rc;
 
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
+use wgw_render::shaders::Shaders;
 use wgw_render::Renderer;
 
 use crate::io;
 use crate::webgl::WebGl;
 
+/// The shared context, on a canvas the page keeps out of the document, and the shaders compiled on it.
+#[wasm_bindgen]
+pub struct Gpu {
+    gl: WebGl,
+    shaders: Rc<Shaders>,
+}
+
+#[wasm_bindgen]
+impl Gpu {
+    #[wasm_bindgen(constructor)]
+    pub fn new(canvas: web_sys::HtmlCanvasElement) -> Result<Gpu, JsValue> {
+        let options = js_sys::Object::new();
+        js_sys::Reflect::set(&options, &"antialias".into(), &true.into())?;
+        js_sys::Reflect::set(&options, &"premultipliedAlpha".into(), &true.into())?;
+        let context = canvas
+            .get_context_with_context_options("webgl2", &options)?
+            .ok_or("WebGL2 isn't available in this browser")?
+            .dyn_into::<web_sys::WebGl2RenderingContext>()?;
+        let gl = WebGl::new(glow::Context::from_webgl2_context(context));
+        let shaders = Rc::new(Shaders::new(&gl).map_err(js)?);
+        Ok(Gpu { gl, shaders })
+    }
+}
+
+/// A figure: its scene, cameras and input, drawn on the page's `Gpu`. Freeing it frees what it made there.
 #[wasm_bindgen]
 pub struct Viewer(Renderer);
 
@@ -17,16 +48,14 @@ fn js(e: String) -> JsValue {
 #[wasm_bindgen]
 impl Viewer {
     #[wasm_bindgen(constructor)]
-    pub fn new(canvas: web_sys::HtmlCanvasElement) -> Result<Viewer, JsValue> {
-        let options = js_sys::Object::new();
-        js_sys::Reflect::set(&options, &"antialias".into(), &true.into())?;
-        js_sys::Reflect::set(&options, &"premultipliedAlpha".into(), &true.into())?;
-        let context = canvas
-            .get_context_with_context_options("webgl2", &options)?
-            .ok_or("WebGL2 isn't available in this browser")?
-            .dyn_into::<web_sys::WebGl2RenderingContext>()?;
-        let gl = WebGl::new(glow::Context::from_webgl2_context(context));
-        Ok(Viewer(Renderer::new(Box::new(gl)).map_err(js)?))
+    pub fn new(gpu: &Gpu) -> Viewer {
+        Viewer(Renderer::with_shaders(Box::new(gpu.gl.clone()), gpu.shaders.clone()))
+    }
+
+    /// Carry on with a new Gpu, after the old one's context was lost and restored: the scene and cameras are
+    /// kept, and everything is uploaded again on the next frame.
+    pub fn restore(&mut self, gpu: &Gpu) {
+        self.0.restore(Box::new(gpu.gl.clone()), gpu.shaders.clone())
     }
 
     // ---- the scene: layers patched by name (see wgw-render's Renderer)

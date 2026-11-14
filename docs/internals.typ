@@ -4,7 +4,9 @@
 = How a figure works
 
 + `wgw.js` finds `.wgw` elements, loads the core (`core/wgw_core_bg.wasm`) if there are any, and gives each
-  figure a canvas and a `Viewer` from the core.
+  figure a canvas and a `Viewer` from the core. Every viewer draws on one WebGL context (the core's `Gpu`), on a
+  canvas off the page: a figure draws into its lower left corner, and the page copies that onto the figure's own
+  (2D) canvas. A renderer frees its GL objects when it's dropped, and the shaders are compiled once, for all.
 + When a figure nears the screen, the page fetches its `data-src`. A mesh is parsed by the core
   (`scene/src/mesh_file.rs`) and drawn; a widget (a WebAssembly module) is instantiated (`js/widget.js`).
 + The widget's `setup` gives its controls; its `scene`, called at the start and on each control or pick (once per
@@ -50,7 +52,9 @@ docs/               these docs, as Typst pages for tdg
 - Widgets are WebAssembly, run in a few workers shared by the page's widgets. A newer request replaces a waiting
   one, and cancels an animation's frames still being built; the first frame is sent ahead of the rest. A patch's
   arrays are viewed in place, and transferred from the worker, not copied.
-- A mesh's faces (and grid) go to the GPU only when they change, not with each new set of values.
+- One WebGL context draws every figure, with the shaders compiled once. A mesh's faces (and grid) go to the GPU
+  only when they change, not with each new set of values.
+- A lost context (a GPU reset) is waited out: each renderer keeps its scene, and uploads it again when it's back.
 - Picking draws one scissored pixel of (layer, element) ids, then refines on the CPU, testing only the triangles
   around the hit.
 - Curves and arrows are instanced: thousands of arrows are one draw call.

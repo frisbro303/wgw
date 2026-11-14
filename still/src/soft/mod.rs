@@ -684,7 +684,9 @@ impl Gl for SoftGl {
     unsafe fn create_renderbuffer(&self) -> Result<gl::Renderbuffer, String> {
         Ok(gl::Renderbuffer(self.id()))
     }
+    unsafe fn delete_framebuffer(&self, _framebuffer: gl::Framebuffer) {}
     unsafe fn bind_renderbuffer(&self, _target: u32, _renderbuffer: Option<gl::Renderbuffer>) {}
+    unsafe fn delete_renderbuffer(&self, _renderbuffer: gl::Renderbuffer) {}
     unsafe fn renderbuffer_storage(&self, _target: u32, _format: u32, _width: i32, _height: i32) {}
     unsafe fn framebuffer_renderbuffer(&self, _target: u32, _attachment: u32, _rb_target: u32, _rb: Option<gl::Renderbuffer>) {}
     unsafe fn read_pixels(&self, x: i32, y: i32, width: i32, height: i32, _format: u32, _ty: u32, pixels: &mut [u8]) {

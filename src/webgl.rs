@@ -1,6 +1,9 @@
-//! The renderer's `Gl` on a page: WebGL2, through glow. Handles are indices into tables of glow's objects.
+//! The renderer's `Gl` on a page: WebGL2, through glow. Handles are indices into tables of glow's objects. A
+//! `WebGl` is a handle to one context: clones share it (and its tables), so a page's figures all draw on one.
 
 use std::cell::RefCell;
+use std::ops::Deref;
+use std::rc::Rc;
 
 use glow::HasContext;
 use wgw_render::gl::{self, Gl};
@@ -28,7 +31,10 @@ impl<T: Copy> Table<T> {
     }
 }
 
-pub struct WebGl {
+#[derive(Clone)]
+pub struct WebGl(Rc<Context>);
+
+pub struct Context {
     gl: glow::Context,
     vertex_arrays: Table<glow::VertexArray>,
     buffers: Table<glow::Buffer>,
@@ -40,9 +46,16 @@ pub struct WebGl {
     renderbuffers: Table<glow::Renderbuffer>,
 }
 
+impl Deref for WebGl {
+    type Target = Context;
+    fn deref(&self) -> &Context {
+        &self.0
+    }
+}
+
 impl WebGl {
     pub fn new(gl: glow::Context) -> Self {
-        WebGl {
+        WebGl(Rc::new(Context {
             gl,
             vertex_arrays: Table::new(),
             buffers: Table::new(),
@@ -52,7 +65,7 @@ impl WebGl {
             locations: RefCell::new(Vec::new()),
             framebuffers: Table::new(),
             renderbuffers: Table::new(),
-        }
+        }))
     }
 }
 
@@ -206,11 +219,17 @@ impl Gl for WebGl {
     unsafe fn bind_framebuffer(&self, target: u32, framebuffer: Option<gl::Framebuffer>) {
         self.gl.bind_framebuffer(target, framebuffer.map(|f| self.framebuffers.get(f.0)))
     }
+    unsafe fn delete_framebuffer(&self, framebuffer: gl::Framebuffer) {
+        self.gl.delete_framebuffer(self.framebuffers.take(framebuffer.0))
+    }
     unsafe fn create_renderbuffer(&self) -> Result<gl::Renderbuffer, String> {
         Ok(gl::Renderbuffer(self.renderbuffers.add(self.gl.create_renderbuffer()?)))
     }
     unsafe fn bind_renderbuffer(&self, target: u32, renderbuffer: Option<gl::Renderbuffer>) {
         self.gl.bind_renderbuffer(target, renderbuffer.map(|r| self.renderbuffers.get(r.0)))
+    }
+    unsafe fn delete_renderbuffer(&self, renderbuffer: gl::Renderbuffer) {
+        self.gl.delete_renderbuffer(self.renderbuffers.take(renderbuffer.0))
     }
     unsafe fn renderbuffer_storage(&self, target: u32, format: u32, width: i32, height: i32) {
         self.gl.renderbuffer_storage(target, format, width, height)

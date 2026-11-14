@@ -1,6 +1,8 @@
 //! The renderer: a scene of layers, its panes and cameras, input, picking and animation, drawn through a `Gl`.
 //! On a page it's WebGL (the wgw crate's Viewer wraps it); for a still, the CPU renderer.
 
+use std::rc::Rc;
+
 use glam::{Vec2, Vec4, Vec4Swizzles};
 use wgw_scene::array::{Data, NdArray};
 use wgw_scene::camera::{self, Camera, Fit, Up};
@@ -29,7 +31,7 @@ struct PickTarget {
 
 pub struct Renderer {
     gl: Box<dyn Gl>,
-    shaders: Shaders,
+    shaders: Rc<Shaders>,
     layers: Vec<Layer>,
     style: Style,
     /// The starting camera, which each pane's camera begins as.
@@ -60,9 +62,15 @@ pub struct Renderer {
 
 impl Renderer {
     pub fn new(gl: Box<dyn Gl>) -> Result<Renderer, String> {
-        let shaders = Shaders::new(gl.as_ref())?;
+        let shaders = Rc::new(Shaders::new(gl.as_ref())?);
+        Ok(Renderer::with_shaders(gl, shaders))
+    }
+
+    /// A renderer using shaders already compiled on the same GL: renderers sharing one context (a page's figures)
+    /// share them too. Each draw sets the program and state it needs, so they can take turns on the context.
+    pub fn with_shaders(gl: Box<dyn Gl>, shaders: Rc<Shaders>) -> Renderer {
         let red = [0.72, 0.25, 0.18, 1.0];
-        Ok(Renderer {
+        Renderer {
             gl,
             shaders,
             layers: Vec::new(),
@@ -85,7 +93,18 @@ impl Renderer {
             reduced_motion: false,
             errors: Vec::new(),
             version: 0,
-        })
+        }
+    }
+
+    /// Carry on with a new GL, after the old one's context was lost: what was made on it died with it, so it's
+    /// forgotten (not deleted), and the next frame uploads every layer again. The scene and cameras are kept.
+    pub fn restore(&mut self, gl: Box<dyn Gl>, shaders: Rc<Shaders>) {
+        self.gl = gl;
+        self.shaders = shaders;
+        self.pick_target = None;
+        for layer in &mut self.layers {
+            layer.primitive = layer::primitive(layer.data.kind);
+        }
     }
 
     // ---- the scene: layers patched by name
@@ -511,6 +530,24 @@ impl Renderer {
     fn cam(&mut self) -> &mut Camera {
         let i = self.active.min(self.cameras.len().saturating_sub(1));
         if self.cameras.is_empty() { &mut self.camera } else { &mut self.cameras[i] }
+    }
+}
+
+/// A renderer frees what it made on its GL, which may outlive it (a context shared by a page's figures). The
+/// shaders are freed with the GL.
+impl Drop for Renderer {
+    fn drop(&mut self) {
+        let gl = self.gl.as_ref();
+        for layer in &mut self.layers {
+            layer.primitive.destroy(gl);
+        }
+        if let Some(t) = self.pick_target.take() {
+            unsafe {
+                gl.delete_framebuffer(t.framebuffer);
+                gl.delete_renderbuffer(t.color);
+                gl.delete_renderbuffer(t.depth);
+            }
+        }
     }
 }
 

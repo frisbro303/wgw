@@ -67,8 +67,10 @@ pub trait Gl {
     unsafe fn draw_arrays_instanced(&self, mode: u32, first: i32, count: i32, instances: i32);
     unsafe fn create_framebuffer(&self) -> Result<Framebuffer, String>;
     unsafe fn bind_framebuffer(&self, target: u32, framebuffer: Option<Framebuffer>);
+    unsafe fn delete_framebuffer(&self, framebuffer: Framebuffer);
     unsafe fn create_renderbuffer(&self) -> Result<Renderbuffer, String>;
     unsafe fn bind_renderbuffer(&self, target: u32, renderbuffer: Option<Renderbuffer>);
+    unsafe fn delete_renderbuffer(&self, renderbuffer: Renderbuffer);
     unsafe fn renderbuffer_storage(&self, target: u32, format: u32, width: i32, height: i32);
     unsafe fn framebuffer_renderbuffer(&self, target: u32, attachment: u32, renderbuffer_target: u32, renderbuffer: Option<Renderbuffer>);
     unsafe fn read_pixels(&self, x: i32, y: i32, width: i32, height: i32, format: u32, ty: u32, pixels: &mut [u8]);
