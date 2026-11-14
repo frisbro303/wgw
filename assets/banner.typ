@@ -8,4 +8,4 @@
 #set text(font: "Libertinus Serif", size: 40pt, weight: "semibold", fill: if dark { rgb("#cecdc3") } else { rgb("#100f0f") })
 // The name centered on the logo by its capitals (from cap height to baseline), not by its descenders.
 #grid(columns: 2, column-gutter: 10pt, align: horizon, image(bytes(icon), height: 56pt),
-  text(top-edge: "cap-height", bottom-edge: "baseline")[Web Geometry Widgets])
+  text(top-edge: "cap-height", bottom-edge: "baseline")[Wasm Geometry Widgets])
