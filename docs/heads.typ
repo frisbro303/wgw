@@ -35,8 +35,12 @@ wgw_figure(function(s) list(mesh = wgw_mesh(vertices * s$t, faces)), list(t = wg
 ```
 
 In Rust, `wgw_show::Figure::widget(w)` runs a `Widget` natively: the same code `cargo wgw` compiles to a `.wgw`
-file. Julia and R count faces and picks from 1, as those languages do; the others from 0. Arrays with one more
-leading axis than usual (frames × n × 3 vertices) are an animation.
+file. Julia and R count from 1, as those languages do (faces and segments, and a pick's vertex and frame); the
+others from 0. Arrays with one more leading axis than usual (frames × n × 3 vertices) are an animation.
+
+Python also reads and writes `.wgw` mesh files, a mesh and any arrays its widget needs (`MeshData` in a widget):
+`wgw.write("spot.wgw", vertices, faces, evecs=evecs)` and `wgw.read("spot.wgw")`. A layer's parameters and
+arrays are checked as it's made: a misspelled parameter, or vertices that aren't (n, 3), fail there and say why.
 
 = Saving images and videos
 
@@ -53,7 +57,7 @@ stills, doesn't carry them.
   [*option*], [],
   [width, height], [the figure's size in CSS pixels (800 by its height)],
   [scale], [image pixels to each CSS pixel (2)],
-  [background], [a CSS color behind it (transparent for PNG, white for videos)],
+  [background], [a CSS color behind it (transparent for PNG and animated PNG, white for GIF and other videos)],
   [controls], [the controls' values],
   [fps, frames, seconds], [a video's rate and length],
   [spin], [degrees it turns about its up axis over the video],

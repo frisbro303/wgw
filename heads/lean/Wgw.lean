@@ -214,7 +214,7 @@ function's figure (or a widget's) is drawn with its controls as set up, or as `c
 animation through, or, for a figure that doesn't animate, turns it `spin` degrees (360) in `seconds` (4). -/
 def save (f : Figure) (path : System.FilePath) (width : Nat := 800) (height : Nat := f.height) (scale : Float := 2)
     (background : Option String := none) (controls : List (String × Json) := []) (seconds : Option Float := none)
-    (spin : Option Float := none) (fps : Option Float := none) : IO Unit := do
+    (spin : Option Float := none) (fps : Option Float := none) (frames : Option Nat := none) : IO Unit := do
   let (kind, body) ← match f.source with
     | .file bytes => pure ("src", bytes)
     | .layers scene => pure ("scene", encode scene)
@@ -224,7 +224,8 @@ def save (f : Figure) (path : System.FilePath) (width : Nat := 800) (height : Na
   let figure := Json.mkObj [("width", width), ("height", height), ("scale", Lean.toJson scale),
     ("background", match background with | some c => Json.str c | none => Json.null),
     ("up", f.up), ("view", Lean.toJson [f.view.1, f.view.2]), ("flat", false)]
-  let video := Json.mkObj <| [("seconds", seconds), ("spin", spin), ("fps", fps)].filterMap fun (k, v) => v.map (k, Lean.toJson ·)
+  let video := Json.mkObj <| ([("seconds", seconds), ("spin", spin), ("fps", fps)].filterMap fun (k, v) => v.map (k, Lean.toJson ·))
+    ++ (frames.map fun n => ("frames", Lean.toJson n)).toList
   let child ← spawn #["--serve"]
   writeFrame child.stdin (Json.mkObj [("type", "save"), ("request", 1), ("path", (← IO.FS.realPath ".") / path |>.toString),
     ("figure", figure), ("video", video), ("controls", Json.mkObj controls), ("body", kind)]) body

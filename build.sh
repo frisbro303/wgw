@@ -7,7 +7,7 @@
 set -e
 cd "$(dirname "$0")"
 
-# wgw's version: [workspace.package]'s in Cargo.toml, the one place it's written.
+# wgw's version: [workspace.package]'s in Cargo.toml (the heads' packages carry it too: tests/versions.sh).
 version=$(sed -n 's/^version = "\(.*\)"$/\1/p' Cargo.toml | head -n 1)
 bindgen=$(grep -A1 '^name = "wasm-bindgen"$' Cargo.lock | sed -n 's/^version = "\(.*\)"$/\1/p')
 if [ "$(wasm-bindgen --version 2>/dev/null)" != "wasm-bindgen $bindgen" ]; then
@@ -24,10 +24,6 @@ if command -v wasm-opt >/dev/null; then
 else
   echo "build.sh: no wasm-opt (binaryen), so the core isn't optimized for size" >&2
 fi
-# The heads (python/, julia/, r/, lean/) carry the same version.
-sed -i.bak "s/^version = \".*\"$/version = \"$version\"/" python/pyproject.toml julia/Wgw/Project.toml lean/lakefile.toml
-sed -i.bak "s/^Version: .*$/Version: $version/" r/wgw/DESCRIPTION
-rm -f python/pyproject.toml.bak julia/Wgw/Project.toml.bak lean/lakefile.toml.bak r/wgw/DESCRIPTION.bak
 cp js/*.js assets/logo.svg dist/
 sed "s/__WGW_VERSION__/$version/" js/wgw.js > dist/wgw.js
 echo "wgw $version: dist/ ($(($(wc -c < dist/core/wgw_core_bg.wasm) / 1024)) KB core)"

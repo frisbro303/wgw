@@ -28,26 +28,64 @@ from pathlib import Path
 
 import numpy as np
 
-__all__ = ["Figure", "Mesh", "Points", "Lines", "Vectors", "Slider", "State", "encode"]
+__all__ = ["Figure", "Mesh", "Points", "Lines", "Vectors", "Slider", "State", "encode", "read", "write"]
 
-INTS = ("faces", "segments")
-PROTOCOL = "1"  # what this head speaks to wgw-window (docs/heads.typ)  # stored as uint32; every other array as float32
+INTS = ("faces", "segments")  # stored as uint32; every other array as float32
+PROTOCOL = "1"  # what this head speaks to wgw-window (docs/heads.typ)
+
+# Each kind's parameters (besides values and range), as wgw's reference lists them.
+COMMON = {"color", "colors", "min", "max", "visible", "pickable", "pane"}
+PARAMS = {
+    "mesh": COMMON | {"flat", "edges", "edge_color"},
+    "points": COMMON | {"size", "lift"},
+    "lines": COMMON | {"width", "closed"},
+    "vectors": COMMON | {"scale", "width"},
+}
 
 
 # ---- layers
 
 
 class Layer:
-    """A layer: its type ("mesh", "points", "lines" or "vectors"), arrays and parameters (see wgw's docs)."""
+    """A layer: its type ("mesh", "points", "lines" or "vectors"), arrays and parameters (see wgw's reference).
+    Its parameters and arrays' shapes are checked as it's made, so a mistake shows where it was made."""
 
     def __init__(self, type, arrays, values=None, range=None, **params):
+        unknown = sorted(set(params) - PARAMS[type])
+        if unknown:
+            raise TypeError(f"a {type} layer has no parameter {', '.join(map(repr, unknown))}; "
+                            f"its parameters are values, range, {', '.join(sorted(PARAMS[type]))}")
         self.type = type
         self.arrays = {k: np.asarray(v) for k, v in arrays.items() if v is not None}
         if values is not None:
             self.arrays["values"] = np.asarray(values)
         if range is not None:
+            if len(range) != 2:
+                raise ValueError(f"range is (min, max), not {range!r}")
             params["min"], params["max"] = range
         self.params = params
+        self._check()
+
+    def _check(self):
+        def fail(text):
+            raise ValueError(f"{self.type}: {text}")
+        v = self.arrays["vertices"]
+        if v.ndim not in (2, 3) or v.shape[-1] != 3:
+            fail(f"vertices are (n, 3), or (frames, n, 3) for an animation, not {v.shape}")
+        n = v.shape[-2]
+        for key, a in self.arrays.items():
+            if key in INTS:
+                width = 3 if key == "faces" else 2
+                if a.ndim != 2 or a.shape[1] != width:
+                    fail(f"{key} are (k, {width}) vertex indices, not {a.shape}")
+                if not np.issubdtype(a.dtype, np.integer) and not np.array_equal(a, np.round(a)):
+                    fail(f"{key} are vertex indices, whole numbers")
+                if a.size and (a.min() < 0 or a.max() >= n):
+                    fail(f"{key} index the {n} vertices from 0, so 0 to {n - 1}, not {a.min()} to {a.max()}")
+            elif key == "vectors" and a.shape[-2:] != (n, 3):
+                fail(f"vectors are one per origin, ({n}, 3), not {a.shape}")
+            elif key == "values" and (a.ndim not in (1, 2) or a.shape[-1] != n):
+                fail(f"values are one per vertex, ({n},), or (frames, {n}) for an animation, not {a.shape}")
 
     def __repr__(self):
         shapes = ", ".join(f"{k}{list(a.shape)}" for k, a in self.arrays.items())
@@ -55,26 +93,62 @@ class Layer:
 
 
 def Mesh(vertices, faces, **params):
-    """A triangle mesh: `(n, 3)` vertices and `(m, 3)` faces. Parameters: values (per vertex), color, colors,
-    range=(min, max), flat, pane, pickable, visible."""
+    """A triangle mesh: `(n, 3)` vertices and `(m, 3)` faces (from 0). Parameters: values (per vertex), color,
+    colors, range=(min, max), flat, edges, edge_color, pane, pickable, visible."""
     return Layer("mesh", {"vertices": vertices, "faces": faces}, **params)
 
 
 def Points(vertices, **params):
-    """Points, drawn as dots: `(n, 3)`. Parameters: values, color, colors, range, size, pane, pickable, visible."""
+    """Points, drawn as dots: `(n, 3)`. Parameters: values, color, colors, range, size, lift, pane, pickable,
+    visible."""
     return Layer("points", {"vertices": vertices}, **params)
 
 
 def Lines(vertices, segments=None, **params):
-    """A curve through `(n, 3)` vertices, or the `(k, 2)` segments given. Parameters: values, color, colors, range,
-    width, pane, pickable, visible."""
+    """A curve through `(n, 3)` vertices, or the `(k, 2)` segments given (from 0). Parameters: values, color,
+    colors, range, width, closed, pane, pickable, visible."""
     return Layer("lines", {"vertices": vertices, "segments": segments}, **params)
 
 
 def Vectors(origins, vectors, **params):
-    """Arrows from `(n, 3)` origins along `(n, 3)` vectors. Parameters: values, color, colors, range, width, pane,
-    pickable, visible."""
+    """Arrows from `(n, 3)` origins along `(n, 3)` vectors. Parameters: values, color, colors, range, scale, width,
+    pane, pickable, visible."""
     return Layer("vectors", {"vertices": origins, "vectors": vectors}, **params)
+
+
+# ---- .wgw mesh files: a mesh and any arrays a widget needs (MeshData in wgw-widget)
+
+DTYPES = {"float32": "f4", "float16": "f2", "float64": "f8", "uint32": "u4", "int32": "i4", "uint16": "u2", "uint8": "u1"}
+
+
+def write(path, vertices, faces, **arrays):
+    """Write a mesh, and any arrays its widget needs (a spectrum, say), to a .wgw file. vertices are stored as
+    float32 and faces as uint32; other arrays keep their dtype, which must be float16, float32, float64, int32,
+    uint8, uint16 or uint32 (cast to float16 to halve a download)."""
+    arrays = {"vertices": np.asarray(vertices, np.float32), "faces": np.asarray(faces, np.uint32), **arrays}
+    header, offset, blobs = {}, 0, []
+    for name, array in arrays.items():
+        array = np.ascontiguousarray(array)
+        if array.dtype.name not in DTYPES:
+            raise TypeError(f"{name}: dtype {array.dtype} can't be stored; use one of {', '.join(DTYPES)}")
+        header[name] = {"dtype": DTYPES[array.dtype.name], "shape": list(array.shape), "offset": offset}
+        blob = array.astype(array.dtype.newbyteorder("<"), copy=False).tobytes()
+        blobs.append(blob + b"\0" * (-len(blob) % 8))
+        offset += len(blobs[-1])
+    text = json.dumps({"arrays": header}, separators=(",", ":")).encode()
+    text += b" " * (-(len(text) + 8) % 8)
+    Path(path).write_bytes(b"WGW1" + struct.pack("<I", len(text)) + text + b"".join(blobs))
+
+
+def read(path):
+    """A .wgw mesh file's arrays by name, vertices and faces among them."""
+    data = Path(path).read_bytes()
+    if data[:4] != b"WGW1":
+        raise ValueError(f"{path} isn't a .wgw mesh file" + (" (it's a widget)" if data[:4] == b"\0asm" else ""))
+    (length,) = struct.unpack("<I", data[4:8])
+    header, start = json.loads(data[8:8 + length])["arrays"], 8 + length
+    return {name: np.frombuffer(data, "<" + a["dtype"], int(np.prod(a["shape"])), start + a["offset"]).reshape(a["shape"])
+            for name, a in header.items()}
 
 
 def _layers(scene):
@@ -145,21 +219,38 @@ class State(dict):
 
 
 class Figure:
-    """A figure. `scene` is a .wgw file (a path or its bytes: a widget, or a mesh); its layers (a dict by name, or
-    one layer); or a function of a State returning them, called again whenever a control moves or a point is
-    picked. `controls` are sliders and checkboxes (True or False) by name, for a function. up is "x", "y" or "z";
-    view is [turn, tilt] in degrees, or [turn, tilt, scale]; pick is "click", "hover" or "none"; height is in CSS
-    pixels."""
+    """A figure.
+
+    scene: a .wgw file (a path or its bytes: a widget, or a mesh); its layers (a dict by name, or one layer); or a
+        function of a State returning them, called again whenever a control moves or a point is picked.
+    controls: sliders and checkboxes (True or False) by name, for a function.
+    up: the axis that points up: "x", "y" or "z".
+    view: the starting camera: (turn, tilt) in degrees, or (turn, tilt, scale).
+    pick: when a pick reaches the function: "click", "hover" or "none".
+    height: the figure's height in CSS pixels.
+    fps, loop: an animation's frames per second, and whether it loops.
+    grid: draw meshes' triangle grids; grid_toggle: a checkbox for readers to show them, starting as given.
+    picked: a vertex of the layer "mesh" picked from the start. keep_picks: keep every pick, not only the latest.
+    panes: the views' relative widths, such as (2, 1), for layers with pane=1.
+    flat: flat shading for the layer "mesh".
+    """
 
     def __init__(self, scene, controls=None, *, title="wgw", up="z", view=(-60, 20), pick="click", height=420,
-                 fps=30, loop=True, grid=False, keep_picks=False, flat=False):
+                 fps=30, loop=True, grid=False, grid_toggle=None, picked=None, keep_picks=False, panes=None,
+                 flat=False):
+        if up not in ("x", "y", "z"):
+            raise ValueError(f'up is "x", "y" or "z", not {up!r}')
+        if pick not in ("click", "hover", "none"):
+            raise ValueError(f'pick is "click", "hover" or "none", not {pick!r}')
         if isinstance(scene, (str, os.PathLike)):
             title, scene = Path(scene).name, Path(scene).read_bytes()
         self.scene, self.controls, self.title, self.height = scene, dict(controls or {}), title, height
         self.options = {"up": up, "view": list(view), "pick": pick, "flat": flat}
         self.setup = {
             "controls": {k: c.spec if isinstance(c, Slider) else bool(c) for k, c in self.controls.items()},
-            "frames": 1, "fps": fps, "loop": loop, "grid": grid, "keepPicks": keep_picks,
+            "frames": 1, "fps": fps, "loop": loop, "keepPicks": keep_picks,
+            "grid": {"toggle": bool(grid_toggle)} if grid_toggle is not None else bool(grid),
+            "picked": picked, "panes": list(panes) if panes is not None else None,
         }
         self._lock = threading.Lock()
         self._urls = {}  # by window: where it's served

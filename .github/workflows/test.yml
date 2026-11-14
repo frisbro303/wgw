@@ -16,6 +16,8 @@ jobs:
       - uses: actions/checkout@v7
       - run: rustup target add wasm32-unknown-unknown
       - run: cargo test
+      - name: Every head is at Cargo.toml's version
+        run: tests/versions.sh
       - name: Install wasm-bindgen (the version in Cargo.lock) and wasm-opt
         run: |
           cargo install wasm-bindgen-cli --locked --version "$(grep -A1 '^name = "wasm-bindgen"$' Cargo.lock | sed -n 's/^version = "\(.*\)"$/\1/p')"

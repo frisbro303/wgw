@@ -87,7 +87,7 @@ Slider(min, max, value; step = nothing, log = false) =
     Slider(Any[min, max, value, (step === nothing ? [] : [step])..., (log ? ["log"] : [])...])
 
 """What a scene is for: the controls' values by name (state["t"]), and the picks so far, the latest last, each a
-Dict with "vertex" (1-based), "layer", "point" and "frame"."""
+Dict with "vertex" and "frame" (both 1-based), "layer" and "point"."""
 struct State
     values::Dict{String,Any}
     picks::Vector{Any}
@@ -141,7 +141,7 @@ function render(fig::Figure, lines::AbstractString)
         if word[1] == "control"
             values[join(word[3:end], ' ')] = word[2] in ("true", "false") ? word[2] == "true" : parse(Float64, word[2])
         elseif word[1] == "pick"
-            push!(picks, Dict("vertex" => parse(Int, word[2]) + 1, "frame" => parse(Int, word[3]),
+            push!(picks, Dict("vertex" => parse(Int, word[2]) + 1, "frame" => parse(Int, word[3]) + 1,
                               "point" => parse.(Float64, word[4:6]), "layer" => String(word[7])))
         end
     end

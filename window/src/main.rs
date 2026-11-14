@@ -1,6 +1,6 @@
-//! wgw-window: shows wgw figures for wgw's heads (Python, Julia, Lean), each in a window with a webview, or, with
-//! `--serve`, only serves them (for Jupyter, which shows them inline). A head starts it once and talks to it over
-//! stdin and stdout, or, with `--connect <port>`, over a TCP connection to that port on 127.0.0.1 (for R, which
+//! wgw-window: shows wgw figures for wgw's heads (Python, Julia, R, Lean, Rust), each in a window with a webview,
+//! or, with `--serve`, only serves them (for Jupyter, which shows them inline). A head starts it once and talks to it
+//! over stdin and stdout, or, with `--connect <port>`, over a TCP connection to that port on 127.0.0.1 (for R, which
 //! can't pipe both ways to a program); the page code, the core and any widget run in the webview, as on any page.
 //!
 //! Messages, both ways, are frames: a little-endian u32 length and a header, then a u32 length and a body. The

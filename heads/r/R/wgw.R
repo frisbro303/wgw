@@ -77,7 +77,7 @@ wgw_slider <- function(min, max, value, step = NULL, log = FALSE)
 }
 `$.wgw_state` <- function(x, name) x[[name]]
 
-#' The latest pick (a list of vertex, 1-based, frame, point and layer), or NULL.
+#' The latest pick (a list of vertex and frame, both 1-based, point and layer), or NULL.
 wgw_pick <- function(s) { picks <- attr(s, "picks"); if (length(picks)) picks[[length(picks)]] }
 
 # ---- figures
@@ -106,7 +106,7 @@ wgw_state <- function(fig, lines) {
     if (length(word) >= 3 && word[1] == "control") {
       values[[paste(word[-(1:2)], collapse = " ")]] <- if (word[2] %in% c("true", "false")) word[2] == "true" else as.numeric(word[2])
     } else if (length(word) >= 7 && word[1] == "pick") {
-      picks[[length(picks) + 1]] <- list(vertex = as.integer(word[2]) + 1L, frame = as.integer(word[3]),
+      picks[[length(picks) + 1]] <- list(vertex = as.integer(word[2]) + 1L, frame = as.integer(word[3]) + 1L,
                                          point = as.numeric(word[4:6]), layer = paste(word[-(1:6)], collapse = " "))
     }
   }

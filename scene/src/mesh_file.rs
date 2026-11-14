@@ -1,4 +1,4 @@
-//! Mesh files: Wavefront .obj, and .wgw (named arrays: a JSON header, then the raw arrays; see python/wgw.py).
+//! Mesh files: Wavefront .obj, and .wgw (named arrays: a JSON header, then the raw arrays; see write() in heads/python).
 //! Either becomes a `MeshFile` of named arrays, shown as a layer and handed to the figure's widget.
 
 use std::collections::HashMap;
