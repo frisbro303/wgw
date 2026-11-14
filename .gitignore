@@ -5,3 +5,4 @@ docs/_site/
 __pycache__/
 .DS_Store
 examples/torus.wgw
+lean/.lake/

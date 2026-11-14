@@ -1,0 +1,14 @@
+name = "wgw"
+version = "0.1.0"
+defaultTargets = ["Wgw"]
+
+[[lean_lib]]
+name = "Wgw"
+
+[[lean_exe]]
+name = "torus"
+root = "Examples.Torus"
+
+[[lean_exe]]
+name = "wgw-test"
+root = "Tests"
