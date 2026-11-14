@@ -307,6 +307,23 @@ impl Renderer {
         click
     }
 
+    /// Turn every pane's camera, by radians (from the keyboard).
+    pub fn turn_by(&mut self, dyaw: f32, dpitch: f32) {
+        for camera in &mut self.cameras {
+            camera.velocity = (0.0, 0.0);
+            camera.turn(dyaw, dpitch);
+        }
+    }
+
+    /// A pane's center, in CSS pixels from the canvas's top left (where the keyboard picks).
+    pub fn pane_center(&self, pane: usize) -> Option<Vec<f32>> {
+        if pane >= self.fits.len().max(1) {
+            return None;
+        }
+        let (x0, w) = self.pane_rect(pane);
+        Some(vec![(x0 as f32 + w as f32 / 2.0) / self.dpr, self.size.1 as f32 / 2.0 / self.dpr])
+    }
+
     pub fn zoom_by(&mut self, factor: f32) {
         for camera in &mut self.cameras {
             camera.zoom_by(factor);

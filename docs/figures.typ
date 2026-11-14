@@ -44,6 +44,9 @@ page's shaders:
 Drag to turn (it glides on), pinch or ctrl/cmd+scroll to zoom, double-click to reset. Plain scrolling scrolls
 the page, so figures never trap it.
 
+From the keyboard, Tab to a figure: the arrow keys turn it (with shift, in small steps), + and - zoom, 0 resets, and
+Enter or space picks the point at the center of its first view, which a small ring marks while it's focused.
+
 = Files
 
 A figure's file is told apart by its first bytes, whatever its name:

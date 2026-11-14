@@ -120,6 +120,12 @@ impl Viewer {
     pub fn pointer_up(&mut self, id: i32, now: f64, cancelled: bool) -> bool {
         self.0.pointer_up(id, now, cancelled)
     }
+    pub fn turn_by(&mut self, dyaw: f32, dpitch: f32) {
+        self.0.turn_by(dyaw, dpitch)
+    }
+    pub fn pane_center(&self, pane: usize) -> Option<Vec<f32>> {
+        self.0.pane_center(pane)
+    }
     pub fn zoom_by(&mut self, factor: f32) {
         self.0.zoom_by(factor)
     }

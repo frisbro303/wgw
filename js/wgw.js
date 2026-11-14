@@ -18,6 +18,9 @@
 // Every figure draws with one WebGL context (browsers keep only about 16 alive), on a canvas kept off the page:
 // a figure draws into its lower left corner, then copies that onto its own canvas. If the context is lost (the GPU
 // reset), figures wait, and carry on as they were when it's restored.
+//
+// A figure can be focused (Tab): the arrow keys turn it (with shift, finely), + and - zoom, 0 resets, and Enter or
+// space picks the point at the center of its first view, which a small ring marks while it's focused.
 
 import init, { Gpu, Viewer as Core } from "./core/wgw_core.js";
 import { fetchBytes, parseMesh } from "./io.js";
@@ -60,12 +63,16 @@ async function loadGpu() {
 }
 const DPR_MAX = 2;
 const RESET = "graphics reset: waiting for the GPU…";
+const TURN_KEYS = { ArrowLeft: [1, 0], ArrowRight: [-1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] };  // as a drag turns
 const REDUCED_MOTION = matchMedia("(prefers-reduced-motion: reduce)");
 
 const STYLE = `
 .wgw{position:relative}
 .wgw canvas{display:block;width:100%;height:var(--wgw-height,420px);touch-action:none;cursor:grab;outline:none}
 .wgw canvas.dragging{cursor:grabbing}
+.wgw canvas:focus-visible{outline:2px solid var(--wgw-control,currentColor);outline-offset:2px}
+.wgw-aim{position:absolute;display:none;width:12px;height:12px;margin:-7px 0 0 -7px;border:1.5px solid var(--wgw-control,currentColor);border-radius:50%;opacity:.7;pointer-events:none}
+.wgw canvas:focus-visible~.wgw-aim{display:block}
 .wgw-status{position:absolute;left:0;right:0;top:0;height:var(--wgw-height,420px);display:flex;align-items:center;justify-content:center;padding:0 24px;text-align:center;font:12px ui-monospace,monospace;opacity:.6;pointer-events:none;white-space:pre-line}
 .wgw-status:empty{display:none}
 .wgw-controls{display:flex;flex-wrap:wrap;justify-content:center;gap:6px 18px;font:13px ui-monospace,monospace}
@@ -133,11 +140,13 @@ export class Viewer {
 
     this.canvas = document.createElement("canvas");
     this.canvas.setAttribute("role", "img");
-    this.canvas.setAttribute("aria-label", d.label || "Interactive 3D figure: drag to turn, pinch or ctrl+scroll to zoom");
+    this.canvas.setAttribute("aria-label", d.label || "Interactive 3D figure: drag or use the arrow keys to turn, pinch, ctrl+scroll or + and - to zoom, Enter to pick the point at the center");
+    this.canvas.tabIndex = 0;
+    this.aim = Object.assign(document.createElement("div"), { className: "wgw-aim" });  // where Enter picks
     this.statusEl = Object.assign(document.createElement("div"), { className: "wgw-status", textContent: "loading…" });
     this.controlsEl = Object.assign(document.createElement("div"), { className: "wgw-controls" });
-    el.append(this.canvas, this.statusEl, this.controlsEl);
-    this.added = [this.canvas, this.statusEl, this.controlsEl];  // what destroy() takes away
+    el.append(this.canvas, this.aim, this.statusEl, this.controlsEl);
+    this.added = [this.canvas, this.aim, this.statusEl, this.controlsEl];  // what destroy() takes away
     if (this.options.credit) {  // a small link to wgw; data-credit="false" (or CSS) hides it
       const credit = Object.assign(document.createElement("a"), {
         className: "wgw-credit", href: "https://github.com/frisbro303/wgw", target: "_blank", rel: "noopener",
@@ -328,6 +337,10 @@ export class Viewer {
     this.screen.drawImage(gl, 0, gl.height - h, w, h, 0, 0, w, h);
     const errors = this.core.take_errors();
     if (errors) this.fail(errors);
+    if (document.activeElement === this.canvas) {  // the aim, at the first view's center
+      const c = this.core.pane_center(0);
+      if (c) Object.assign(this.aim.style, { left: `${this.canvas.offsetLeft + c[0]}px`, top: `${this.canvas.offsetTop + c[1]}px` });
+    }
     if (this.hoverAt) {
       const [x, y] = this.hoverAt;
       this.hoverAt = null;
@@ -369,6 +382,21 @@ export class Viewer {
       this.requestRender();
     }, { passive: false });
     canvas.addEventListener("dblclick", () => this.reset());
+    canvas.addEventListener("focus", () => this.requestRender());  // to place the aim
+    canvas.addEventListener("keydown", (e) => {
+      if (e.altKey || e.ctrlKey || e.metaKey) return;
+      const step = ((e.shiftKey ? 3 : 15) * Math.PI) / 180;
+      if (e.key in TURN_KEYS) core.turn_by(TURN_KEYS[e.key][0] * step, TURN_KEYS[e.key][1] * step);
+      else if (e.key === "+" || e.key === "=") core.zoom_by(1 / 1.2);
+      else if (e.key === "-" || e.key === "_") core.zoom_by(1.2);
+      else if (e.key === "0" || e.key === "Home") core.reset();
+      else if (e.key === "Enter" || e.key === " ") {
+        const c = core.pane_center(0);
+        if (c && this.options.pick !== "none") this.picked(core.pick(c[0], c[1]), false);
+      } else return;
+      e.preventDefault();  // no page scroll
+      this.requestRender();
+    });
   }
 
   picked(hit, hovering) {
