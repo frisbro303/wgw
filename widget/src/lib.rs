@@ -23,7 +23,7 @@
 //!     }
 //!     fn scene(&self, state: &State) -> Scene {
 //!         let twist = state.value("twist");
-//!         Scene::new().layer("torus", Mesh::new(self.mesh.vertices.clone(), self.mesh.faces.clone()).color("var(--link)"))
+//!         Scene::new().layer("torus", Mesh::new(&self.mesh.vertices, &self.mesh.faces).color("var(--link)"))
 //!     }
 //! }
 //!
@@ -35,6 +35,7 @@
 //! so a widget gives what never changes (a sphere, a grid) with frame 0 only, and it's sent once. The functions follow Typst's plugin protocol (two imports from
 //! `typst_env`), so the same `.wasm` loads in Typst as a plugin and on a page in wgw's runner.
 
+use std::borrow::Cow;
 use std::collections::HashMap;
 
 use serde_json::{json, Map, Value};
@@ -51,7 +52,70 @@ pub use serde_json;
 pub struct MeshData {
     pub vertices: Vec<[f32; 3]>,
     pub faces: Vec<[u32; 3]>,
-    arrays: HashMap<String, (Vec<f32>, Vec<usize>)>,
+    arrays: HashMap<String, Array>,
+}
+
+/// One of a mesh file's other arrays, row-major, with its shape.
+#[derive(Clone, Debug)]
+pub struct Array {
+    pub values: Values,
+    pub shape: Vec<usize>,
+}
+
+/// An array's numbers in the type the file has them in: f64s stay f64s, and integers stay exact. The smaller types
+/// are widened: f16 to f32, u8 and u16 to u32.
+#[derive(Clone, Debug)]
+pub enum Values {
+    F32(Vec<f32>),
+    F64(Vec<f64>),
+    U32(Vec<u32>),
+    I32(Vec<i32>),
+}
+
+impl Array {
+    /// As f32s, converted if they're another type.
+    pub fn f32s(&self) -> Cow<'_, [f32]> {
+        match &self.values {
+            Values::F32(v) => Cow::Borrowed(v),
+            Values::F64(v) => v.iter().map(|&x| x as f32).collect(),
+            Values::U32(v) => v.iter().map(|&x| x as f32).collect(),
+            Values::I32(v) => v.iter().map(|&x| x as f32).collect(),
+        }
+    }
+    /// As f64s, converted (exactly) if they're another type.
+    pub fn f64s(&self) -> Cow<'_, [f64]> {
+        match &self.values {
+            Values::F64(v) => Cow::Borrowed(v),
+            Values::F32(v) => v.iter().map(|&x| x as f64).collect(),
+            Values::U32(v) => v.iter().map(|&x| x as f64).collect(),
+            Values::I32(v) => v.iter().map(|&x| x as f64).collect(),
+        }
+    }
+    /// As u32s, if they're unsigned integers (indices, say).
+    pub fn u32s(&self) -> Option<&[u32]> {
+        match &self.values {
+            Values::U32(v) => Some(v),
+            _ => None,
+        }
+    }
+    /// As i32s, if they're signed integers.
+    pub fn i32s(&self) -> Option<&[i32]> {
+        match &self.values {
+            Values::I32(v) => Some(v),
+            _ => None,
+        }
+    }
+}
+
+/// An IEEE half-precision float, as f32.
+fn f16_to_f32(h: u16) -> f32 {
+    let (sign, exp, frac) = ((h >> 15) as u32, ((h >> 10) & 0x1f) as u32, (h & 0x3ff) as u32);
+    let magnitude = match exp {
+        0 => frac as f32 * 2f32.powi(-24), // subnormal
+        0x1f => if frac == 0 { f32::INFINITY } else { f32::NAN },
+        _ => f32::from_bits(((exp + 112) << 23) | (frac << 13)),
+    };
+    if sign == 1 { -magnitude } else { magnitude }
 }
 
 impl MeshData {
@@ -67,14 +131,17 @@ impl MeshData {
                 continue;
             }
             let (Some(dtype), Some(shape), Some(raw)) = (file.dtype(&name), file.shape(&name), file.bytes(&name)) else { continue };
-            let values: Vec<f32> = match dtype.as_str() {
-                "f4" => raw.chunks_exact(4).map(|b| f32::from_le_bytes(b.try_into().unwrap())).collect(),
-                "f8" => raw.chunks_exact(8).map(|b| f64::from_le_bytes(b.try_into().unwrap()) as f32).collect(),
-                "u4" => raw.chunks_exact(4).map(|b| u32::from_le_bytes(b.try_into().unwrap()) as f32).collect(),
-                "i4" => raw.chunks_exact(4).map(|b| i32::from_le_bytes(b.try_into().unwrap()) as f32).collect(),
+            let values = match dtype.as_str() {
+                "f4" => Values::F32(raw.chunks_exact(4).map(|b| f32::from_le_bytes(b.try_into().unwrap())).collect()),
+                "f8" => Values::F64(raw.chunks_exact(8).map(|b| f64::from_le_bytes(b.try_into().unwrap())).collect()),
+                "f2" => Values::F32(raw.chunks_exact(2).map(|b| f16_to_f32(u16::from_le_bytes([b[0], b[1]]))).collect()),
+                "u4" => Values::U32(raw.chunks_exact(4).map(|b| u32::from_le_bytes(b.try_into().unwrap())).collect()),
+                "u2" => Values::U32(raw.chunks_exact(2).map(|b| u16::from_le_bytes([b[0], b[1]]) as u32).collect()),
+                "u1" => Values::U32(raw.iter().map(|&b| b as u32).collect()),
+                "i4" => Values::I32(raw.chunks_exact(4).map(|b| i32::from_le_bytes(b.try_into().unwrap())).collect()),
                 _ => continue,
             };
-            arrays.insert(name, (values, shape.iter().map(|&s| s as usize).collect()));
+            arrays.insert(name, Array { values, shape: shape.iter().map(|&s| s as usize).collect() });
         }
         Ok(MeshData {
             vertices: v.chunks_exact(3).map(|c| [c[0], c[1], c[2]]).collect(),
@@ -83,9 +150,10 @@ impl MeshData {
         })
     }
 
-    /// One of the file's other arrays, as floats, with its shape: `mesh.array("evecs")`.
-    pub fn array(&self, name: &str) -> Option<(&[f32], &[usize])> {
-        self.arrays.get(name).map(|(v, s)| (v.as_slice(), s.as_slice()))
+    /// One of the file's other arrays: `mesh.array("evecs")`, then `.f32s()` (or `.f64s()`, `.u32s()`, `.i32s()`)
+    /// and `.shape`.
+    pub fn array(&self, name: &str) -> Option<&Array> {
+        self.arrays.get(name)
     }
 }
 
@@ -108,14 +176,27 @@ pub struct State {
 }
 
 impl State {
-    /// A slider's value.
+    /// A slider's value. Panics if the widget has no slider of that name (a typo shows on the figure, rather than
+    /// reading as 0).
     pub fn value(&self, name: &str) -> f32 {
-        self.values.get(name).and_then(Value::as_f64).unwrap_or(0.0) as f32
+        match self.values.get(name) {
+            Some(v) => v.as_f64().unwrap_or_else(|| panic!("the control {name:?} is a checkbox: use state.checked")) as f32,
+            None => panic!("no slider named {name:?}; the controls are {}", self.names()),
+        }
     }
 
-    /// A checkbox's state.
+    /// A checkbox's state. Panics if the widget has no checkbox of that name.
     pub fn checked(&self, name: &str) -> bool {
-        self.values.get(name).and_then(Value::as_bool).unwrap_or(false)
+        match self.values.get(name) {
+            Some(v) => v.as_bool().unwrap_or_else(|| panic!("the control {name:?} is a slider: use state.value")),
+            None => panic!("no checkbox named {name:?}; the controls are {}", self.names()),
+        }
+    }
+
+    fn names(&self) -> String {
+        let mut names: Vec<_> = self.values.keys().map(|k| format!("{k:?}")).collect();
+        names.sort();
+        if names.is_empty() { "none".into() } else { names.join(", ") }
     }
 
     /// The latest pick, if any.
@@ -224,6 +305,14 @@ impl Setup {
         self
     }
 
+    /// Each control's starting value, as a state has it.
+    fn defaults(&self) -> Map<String, Value> {
+        self.controls.iter().map(|(name, spec)| (name.clone(), match spec {
+            Value::Array(s) => s[2].clone(),
+            other => other.clone(),
+        })).collect()
+    }
+
     fn to_json(&self) -> Value {
         json!({
             "controls": self.controls,
@@ -265,8 +354,9 @@ impl Layer {
         self
     }
 
-    /// Per-vertex values, colored through the layer's colors.
-    pub fn values(self, values: Vec<f32>) -> Self {
+    /// Per-vertex values, colored through the layer's colors: a `Vec<f32>` (moved in) or a slice (copied).
+    pub fn values(self, values: impl Into<Vec<f32>>) -> Self {
+        let values = values.into();
         let n = values.len();
         self.array("values", Data::F32(values), vec![n])
     }
@@ -303,12 +393,16 @@ impl Layer {
     }
 }
 
+// The layers take their arrays as anything that's a slice of rows (`Vec`s, `&Vec`s, slices, arrays), so a widget
+// passes what it keeps by reference, `Mesh::new(&self.vertices, &self.faces)`, rather than cloning it.
+
 /// A triangle mesh.
 pub struct Mesh;
 impl Mesh {
-    pub fn new(vertices: Vec<[f32; 3]>, faces: Vec<[u32; 3]>) -> Layer {
+    pub fn new(vertices: impl AsRef<[[f32; 3]]>, faces: impl AsRef<[[u32; 3]]>) -> Layer {
+        let (vertices, faces) = (vertices.as_ref(), faces.as_ref());
         let (n, m) = (vertices.len(), faces.len());
-        Layer::new("mesh").array("vertices", Data::F32(flat3(&vertices)), vec![n, 3]).array("faces", Data::U32(flat3(&faces)), vec![m, 3])
+        Layer::new("mesh").array("vertices", Data::F32(flat3(vertices)), vec![n, 3]).array("faces", Data::U32(flat3(faces)), vec![m, 3])
     }
     /// The figure's own mesh (from its `src`), changed only in its parameters and values.
     pub fn existing() -> Layer {
@@ -319,24 +413,27 @@ impl Mesh {
 /// Points, drawn as dots.
 pub struct Points;
 impl Points {
-    pub fn new(vertices: Vec<[f32; 3]>) -> Layer {
+    pub fn new(vertices: impl AsRef<[[f32; 3]]>) -> Layer {
+        let vertices = vertices.as_ref();
         let n = vertices.len();
-        Layer::new("points").array("vertices", Data::F32(flat3(&vertices)), vec![n, 3])
+        Layer::new("points").array("vertices", Data::F32(flat3(vertices)), vec![n, 3])
     }
 }
 
 /// A curve, or any set of segments.
 pub struct Lines;
 impl Lines {
-    pub fn new(vertices: Vec<[f32; 3]>) -> Layer {
+    pub fn new(vertices: impl AsRef<[[f32; 3]]>) -> Layer {
+        let vertices = vertices.as_ref();
         let n = vertices.len();
-        Layer::new("lines").array("vertices", Data::F32(flat3(&vertices)), vec![n, 3])
+        Layer::new("lines").array("vertices", Data::F32(flat3(vertices)), vec![n, 3])
     }
 }
 
 impl Layer {
     /// Which vertices to join, in pairs; by default, each to the next.
-    pub fn segments(self, pairs: Vec<[u32; 2]>) -> Self {
+    pub fn segments(self, pairs: impl AsRef<[[u32; 2]]>) -> Self {
+        let pairs = pairs.as_ref();
         let n = pairs.len();
         self.array("segments", Data::U32(pairs.iter().flatten().copied().collect()), vec![n, 2])
     }
@@ -345,9 +442,10 @@ impl Layer {
 /// Arrows: a vector field.
 pub struct Vectors;
 impl Vectors {
-    pub fn new(origins: Vec<[f32; 3]>, vectors: Vec<[f32; 3]>) -> Layer {
+    pub fn new(origins: impl AsRef<[[f32; 3]]>, vectors: impl AsRef<[[f32; 3]]>) -> Layer {
+        let (origins, vectors) = (origins.as_ref(), vectors.as_ref());
         let n = origins.len();
-        Layer::new("vectors").array("vertices", Data::F32(flat3(&origins)), vec![n, 3]).array("vectors", Data::F32(flat3(&vectors)), vec![n, 3])
+        Layer::new("vectors").array("vertices", Data::F32(flat3(origins)), vec![n, 3]).array("vectors", Data::F32(flat3(vectors)), vec![n, 3])
     }
 }
 
@@ -448,8 +546,12 @@ pub mod runtime {
             point: p["point"].as_array().filter(|a| a.len() == 3).map(|a| [0, 1, 2].map(|i| a[i].as_f64().unwrap_or(0.0) as f32)),
             frame: p["frame"].as_u64().unwrap_or(0) as u32,
         }).collect();
+        // Every control has a value: the page sends them all, and any a host leaves out (a still, say) starts as
+        // the setup says.
+        let mut values = w.setup().defaults();
+        values.extend(v["controls"].as_object().cloned().unwrap_or_default());
         let state = State {
-            values: v["controls"].as_object().cloned().unwrap_or_default(),
+            values,
             picks,
             frame: v["frame"].as_u64().unwrap_or(0) as u32,
         };
@@ -477,4 +579,93 @@ macro_rules! export {
             $crate::runtime::send($crate::runtime::with(&WIDGET, &args[0], |w: &$widget| $crate::runtime::scene(w, &args[1])).and_then(|r| r))
         }
     };
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A .wgw file of one triangle and these extra arrays: (name, dtype, shape, bytes).
+    fn wgw(extra: &[(&str, &str, &[usize], Vec<u8>)]) -> Vec<u8> {
+        let vertices: Vec<u8> = [0f32, 0., 0., 1., 0., 0., 0., 1., 0.].iter().flat_map(|x| x.to_le_bytes()).collect();
+        let faces: Vec<u8> = [0u32, 1, 2].iter().flat_map(|x| x.to_le_bytes()).collect();
+        let mut arrays = vec![("vertices", "f4", &[3usize, 3][..], vertices), ("faces", "u4", &[1, 3][..], faces)];
+        arrays.extend(extra.iter().map(|(n, d, s, b)| (*n, *d, *s, b.clone())));
+        let (mut header, mut data) = (Map::new(), Vec::new());
+        for (name, dtype, shape, bytes) in arrays {
+            header.insert(name.into(), json!({ "dtype": dtype, "shape": shape, "offset": data.len() }));
+            data.extend(bytes);
+            data.resize(data.len().next_multiple_of(8), 0);
+        }
+        let header = json!({ "arrays": header }).to_string();
+        let mut out = b"WGW1".to_vec();
+        out.extend((header.len() as u32).to_le_bytes());
+        out.extend(header.as_bytes());
+        out.extend(data);
+        out
+    }
+
+    #[test]
+    fn arrays_keep_their_type() {
+        let big = [16_777_217u32, 3];
+        let file = wgw(&[
+            ("ids", "u4", &[2], big.iter().flat_map(|x| x.to_le_bytes()).collect()),
+            ("exact", "f8", &[1], 0.1f64.to_le_bytes().to_vec()),
+            ("half", "f2", &[3], [0x3c00u16, 0xc000, 0x0001].iter().flat_map(|x| x.to_le_bytes()).collect()),
+            ("bytes", "u1", &[2], vec![7, 255]),
+        ]);
+        let mesh = MeshData::parse(&file).unwrap();
+        assert_eq!(mesh.faces, vec![[0, 1, 2]]);
+        assert_eq!(mesh.array("ids").unwrap().u32s(), Some(&big[..])); // above 2^24, still exact
+        assert_eq!(mesh.array("exact").unwrap().f64s()[0], 0.1);
+        assert_eq!(mesh.array("half").unwrap().f32s().as_ref(), &[1.0, -2.0, 2f32.powi(-24)]);
+        assert_eq!(mesh.array("bytes").unwrap().u32s(), Some(&[7, 255][..]));
+        assert_eq!(mesh.array("ids").unwrap().shape, vec![2]);
+        assert!(mesh.array("nothing").is_none());
+    }
+
+    struct Probe;
+    impl Widget for Probe {
+        fn new(_: Option<MeshData>) -> Self { Probe }
+        fn setup(&self) -> Setup {
+            Setup::new().slider("epsilon", Slider::new(0.001, 1.0, 0.02).log()).checkbox("smooth", true)
+        }
+        fn scene(&self, state: &State) -> Scene {
+            let at = [[state.value("epsilon"), state.checked("smooth") as u8 as f32, 0.0]];
+            Scene::new().layer("dot", Points::new(at))
+        }
+    }
+
+    fn state(values: Value) -> State {
+        State { values: values.as_object().unwrap().clone(), ..Default::default() }
+    }
+
+    #[test]
+    fn controls_by_name() {
+        let s = state(json!({ "epsilon": 0.5, "smooth": false }));
+        assert_eq!(s.value("epsilon"), 0.5);
+        assert!(!s.checked("smooth"));
+    }
+
+    #[test]
+    #[should_panic(expected = "no slider named \"epsilom\"; the controls are \"epsilon\", \"smooth\"")]
+    fn a_misspelled_slider_panics() {
+        state(json!({ "epsilon": 0.5, "smooth": false })).value("epsilom");
+    }
+
+    #[test]
+    #[should_panic(expected = "is a checkbox")]
+    fn a_checkbox_read_as_a_slider_panics() {
+        state(json!({ "smooth": false })).value("smooth");
+    }
+
+    #[test]
+    fn controls_left_out_start_as_set_up() {
+        // A host that sends no controls (a still) gets each control's starting value.
+        let bytes = runtime::scene(&Probe, br#"{"controls": {"smooth": false}}"#).unwrap();
+        let patch = patch::decode(&bytes).unwrap();
+        let (_, dot) = &patch.layers[0];
+        let Data::F32(v) = &dot.as_ref().unwrap().arrays[0].1.data else { panic!("f32 vertices") };
+        assert_eq!(v, &vec![0.02, 0.0, 0.0]);
+    }
 }

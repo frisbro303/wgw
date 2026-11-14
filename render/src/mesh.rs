@@ -71,17 +71,20 @@ impl Primitive for Mesh {
         upload(gl, glow::ARRAY_BUFFER, g.normal, &normals);
         upload(gl, glow::ARRAY_BUFFER, g.value, &values);
         if changed {
-            upload(gl, glow::ELEMENT_ARRAY_BUFFER, g.faces, faces);
             gl::colormap(gl, Some(g.colormap), &data.stops(style));
-            self.count = faces.len() as i32;
-            if data.flag("edges", style.grid) {
+            // The faces and their edges go up only when the faces change, not with every new set of values. The
+            // first upload compares against no faces at all.
+            if self.faces != faces || self.count == 0 {
+                upload(gl, glow::ELEMENT_ARRAY_BUFFER, g.faces, faces);
+                self.count = faces.len() as i32;
+                self.faces = faces.to_vec();
+                self.around = None;
+                self.edge_count = 0;
+            }
+            if data.flag("edges", style.grid) && self.edge_count == 0 && !faces.is_empty() {
                 let edges = unique_edges(faces);
                 upload(gl, glow::ELEMENT_ARRAY_BUFFER, g.edges, &edges);
                 self.edge_count = edges.len() as i32;
-            }
-            if self.faces != faces {
-                self.faces = faces.to_vec();
-                self.around = None;
             }
         }
         unsafe { gl.bind_vertex_array(None) };

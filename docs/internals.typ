@@ -49,6 +49,7 @@ docs/               these docs, as Typst pages for tdg
 - The mesh file is parsed in the core and drawn before any widget starts.
 - Widgets are WebAssembly, run on the page. A newer request replaces a waiting one; a patch's arrays are viewed
   in place, not copied.
+- A mesh's faces (and grid) go to the GPU only when they change, not with each new set of values.
 - Picking draws one scissored pixel of (layer, element) ids, then refines on the CPU, testing only the triangles
   around the hit.
 - Curves and arrows are instanced: thousands of arrows are one draw call.

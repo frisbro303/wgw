@@ -34,7 +34,7 @@ impl Widget for Torus {
             }
         }
         let at = |i: usize, j: usize| ((i % N) * N + j % N) as u32;
-        let faces = (0..N).flat_map(|i| (0..N).flat_map(move |j| {
+        let faces: Vec<[u32; 3]> = (0..N).flat_map(|i| (0..N).flat_map(move |j| {
             [[at(i, j), at(i + 1, j), at(i + 1, j + 1)], [at(i, j), at(i + 1, j + 1), at(i, j + 1)]]
         })).collect();
         Scene::new().layer("torus", Mesh::new(vertices, faces).values(values))

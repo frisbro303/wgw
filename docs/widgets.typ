@@ -55,7 +55,7 @@ A scene is layers by name: `Scene::new().layer("name", layer)`, or `.remove("nam
 arrays, then given parameters:
 
 ```rust
-Mesh::new(vertices, faces)      // Vec<[f32; 3]>, Vec<[u32; 3]>
+Mesh::new(&vertices, &faces)    // slices (or Vecs) of [f32; 3] and [u32; 3]
 Points::new(vertices)
 Lines::new(vertices).segments(pairs)   // each vertex to the next, unless given pairs
 Vectors::new(origins, vectors)
@@ -76,7 +76,7 @@ A widget carries its data: embed a mesh file, and anything else as extra arrays 
 ```rust
 fn new(_mesh: Option<MeshData>) -> Self {
     let spot = MeshData::parse(include_bytes!("spot.wgw")).unwrap();   // .wgw or .obj
-    let (evecs, shape) = spot.array("evecs").unwrap();                // extra arrays, as floats
+    let evecs = spot.array("evecs").unwrap();          // extra arrays: evecs.f32s() (or f64s, u32s, i32s), evecs.shape
     ...
 }
 ```

@@ -38,7 +38,7 @@ impl Widget for Distance {
             .map(|x| (-x.iter().zip(at).map(|(a, b)| (a - b).powi(2)).sum::<f32>() / state.value("epsilon")).exp())
             .collect();
         Scene::new()
-            .layer("mesh", Mesh::new(self.spot.vertices.clone(), self.spot.faces.clone()).values(values))
+            .layer("mesh", Mesh::new(&self.spot.vertices, &self.spot.faces).values(values))
             .layer("dot", Points::new(vec![self.spot.vertices[v]]))
     }
 }
