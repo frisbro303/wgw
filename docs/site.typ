@@ -16,4 +16,5 @@
 #include "widgets.typ"
 #include "reference.typ"
 #include "javascript.typ"
+#include "heads.typ"
 #include "internals.typ"

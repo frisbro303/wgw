@@ -1,5 +1,5 @@
 #import "@local/tdg:0.1.0": *
-#show: docs.doc.with("internals", title: "Internals", order: 6, description: "How wgw works, how to extend it, and how its docs are built.")
+#show: docs.doc.with("internals", title: "Internals", order: 7, description: "How wgw works, how to extend it, and how its docs are built.")
 
 = How a figure works
 
@@ -15,9 +15,9 @@
 The core holds the scene and does the drawing, cameras, picking and animation; the page handles the DOM, input
 events, controls and widgets. Between them are named n-dimensional arrays (typed arrays with a shape).
 
-A still (a figure in a PDF) is the same scene drawn by the same renderer: wgw-still runs the core's renderer on a
-GL implemented on the CPU (`still/src/soft/`), which runs the same WGSL shaders, compiled to a register machine
-from naga's IR. tdg runs the widget as a Typst plugin and hands its first frame to wgw-still in its own plugin.
+A still (a figure in a PDF) is the same scene drawn by the same renderer: wgw-headless runs the core's renderer on a
+GL implemented on the CPU (`headless/src/soft/`), which runs the same WGSL shaders, compiled to a register machine
+from naga's IR. tdg runs the widget as a Typst plugin and hands its first frame to wgw-headless in its own plugin.
 
 = Layout
 
@@ -28,7 +28,12 @@ render/             wgw-render: the renderer (layers, panes, cameras, picking, a
                     with the shaders translated to GLSL for WebGL by naga (render/build.rs)
 src/                the page's core: the renderer on WebGL (through glow), for the page's Viewer
 widget/             wgw-widget: writing widgets in Rust
-still/              wgw-still: stills on the CPU (the renderer on a CPU GL that runs the shaders)
+headless/           wgw-headless: figures without a browser (the renderer on a CPU GL that runs the shaders): stills,
+                    and, as features, videos and running widgets; saving them to files
+window/             wgw-window: the heads' program: their protocol, figures in windows (webviews) or served, and
+                    saves (by wgw-headless)
+show/, python/, julia/, r/, lean/   the heads: wgw-show (Rust), and Python, Julia, R and Lean
+tests/heads/        what every head must do with the same input
 js/wgw.js           figures: the DOM, input, controls, applying patches
 js/widget.js        running widgets, and decoding their patches
 js/patch.js, io.js, style.js   controls as inputs; fetching and parsing mesh files; reading CSS colors
@@ -65,6 +70,8 @@ docs/               these docs, as Typst pages for tdg
 ./build.sh [folder]     # the core into dist/core (cargo, wasm-bindgen, wasm-opt); the JS beside it
 cargo test              # every crate, natively
 cargo wgw -p torus      # the example widget, examples/torus.wgw
+cargo build --release -p wgw-window   # for the heads (after build.sh); --no-default-features: headless
+tests/heads/run.sh      # every head against the same input
 ```
 
 The examples page (`examples/index.html`) loads `dist/` and `examples/torus.wgw` (the built torus widget). There

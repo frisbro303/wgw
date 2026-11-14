@@ -18,7 +18,7 @@ widget or a mesh: this one is just a mesh (`data-src`, `data-up` and `data-view`
 
 In a #link("https://github.com/frisbro303/tdg")[tdg] site, `widget(...)` makes the same figure, numbered and
 captioned like any other; tdg publishes its file (given as a path) with the site, and a PDF shows its first
-frame: tdg runs the widget (as a Typst plugin) and wgw's own renderer draws it on the CPU (wgw-still), with the
+frame: tdg runs the widget (as a Typst plugin) and wgw's own renderer draws it on the CPU (wgw-headless), with the
 page's shaders:
 
 ```typ

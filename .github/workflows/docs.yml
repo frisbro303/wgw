@@ -39,6 +39,8 @@ jobs:
           mkdir -p ~/.local/share/typst/packages/local/tdg
           cp -R /tmp/tdg/typst ~/.local/share/typst/packages/local/tdg/0.1.0
       - run: typst compile --root . --features html,bundle --format bundle docs/site.typ docs/_site
+      - name: Serve this repository's page code, not tdg's copy of it
+        run: rm -rf docs/_site/_tdg/wgw && cp -R dist docs/_site/_tdg/wgw
       - uses: actions/upload-pages-artifact@v5
         with:
           path: docs/_site/

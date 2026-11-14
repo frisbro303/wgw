@@ -24,9 +24,15 @@ if command -v wasm-opt >/dev/null; then
 else
   echo "build.sh: no wasm-opt (binaryen), so the core isn't optimized for size" >&2
 fi
+# The heads (python/, julia/, r/, lean/) carry the same version.
+sed -i.bak "s/^version = \".*\"$/version = \"$version\"/" python/pyproject.toml julia/Wgw/Project.toml lean/lakefile.toml
+sed -i.bak "s/^Version: .*$/Version: $version/" r/wgw/DESCRIPTION
+rm -f python/pyproject.toml.bak julia/Wgw/Project.toml.bak lean/lakefile.toml.bak r/wgw/DESCRIPTION.bak
 cp js/*.js assets/logo.svg dist/
 sed "s/__WGW_VERSION__/$version/" js/wgw.js > dist/wgw.js
 echo "wgw $version: dist/ ($(($(wc -c < dist/core/wgw_core_bg.wasm) / 1024)) KB core)"
+
+echo "for the Python, Julia, R, Lean and Rust heads: cargo build --release -p wgw-window (or cargo install --path window)"
 
 if [ -n "$1" ]; then
   rm -rf "$1" && mkdir -p "$1" && cp -R dist/. "$1"

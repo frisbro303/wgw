@@ -49,6 +49,48 @@ export!(Distance);
 In a [tdg](https://github.com/frisbro303/tdg) site, `#widget(path("distance.wgw"))` makes the same figure, and its
 PDF shows the figure's first frame, drawn by wgw's own renderer with the page's shaders.
 
+## Python, Julia, R, Lean and Rust
+
+The same figures in a window, from a program: [`python/`](python), [`julia/Wgw`](julia/Wgw), [`r/wgw`](r/wgw),
+[`lean/`](lean) and [`show/`](show) (Rust) are thin heads over `wgw-window` ([`window/`](window)), a small Rust
+program that shows each figure in a webview, running wgw's page code and core, and asks the head for a new scene
+when a slider moves or a point is picked. A figure is a `.wgw` file (a widget or a mesh), arrays as layers, or a
+function of the controls:
+
+```python
+import wgw
+wgw.Figure("examples/torus.wgw").show()
+wgw.Figure(lambda s: {"mesh": wgw.Mesh(vertices * s["t"], faces)}, {"t": wgw.Slider(0.5, 2, 1)}).show()
+```
+
+```julia
+using Wgw
+display(Figure(s -> Dict("mesh" => Mesh(vertices .* s["t"], faces)), "t" => Slider(0.5, 2, 1)))
+```
+
+```r
+wgw_figure(function(s) list(mesh = wgw_mesh(vertices * s$t, faces)), list(t = wgw_slider(0.5, 2, 1)))
+```
+
+In Rust, `wgw_show::Figure::widget(w).show()` runs a widget natively, the same code `cargo wgw` compiles to a
+`.wgw` file (`cargo run -p wgw-show --example torus`); `lean/Examples/Torus.lean` is the Lean version
+(`lake exe torus`). A window closes when its program ends, so a script waits on `show` until it's closed; Python's
+figures also show inline in Jupyter. Each release has `wgw-window` built for Linux, macOS and Windows; from the
+repository, `./build.sh` (it carries `dist/` inside), then `cargo install --path window`, or point `WGW_WINDOW` at
+`target/release/wgw-window`. Built with `--no-default-features` it has no windows and needs no webview, for saving
+on machines with no display.
+
+Every head also saves a figure headless, as an image or a video, drawn on the CPU by wgw's own renderer
+(`wgw-headless`): `fig.save("torus.png")`, `fig.save("torus.mp4", seconds=4)` in Python; `savefig` in Julia,
+`wgw_save` in R, `Figure.save` in Lean and `Figure::save` in Rust. `wgw-headless` does all of it: PNG, animated PNG
+and GIF itself, MP4, WebM and MOV by `ffmpeg` if it's installed. A video plays an animation through, or turns a
+figure that doesn't animate once around; widgets (`.wgw`) run in `wgw-headless`'s WebAssembly interpreter, with the
+controls as set up or as given.
+
+In Typst, [tdg](https://github.com/frisbro303/tdg)'s `#widget` makes a figure live in HTML and a still in PDF, drawn
+by wgw-headless in tdg's plugin. The heads and their protocol:
+[docs](https://frisbro303.github.io/wgw/heads/); `tests/heads/run.sh` checks every head against the same input.
+
 ## Build
 
 Needs Rust with the `wasm32-unknown-unknown` target, `wasm-bindgen-cli` at the version in `Cargo.lock` (`build.sh`
