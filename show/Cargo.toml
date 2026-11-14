@@ -1,0 +1,11 @@
+[package]
+name = "wgw-show"
+description = "wgw for Rust programs: a widget, a scene or a .wgw file in a window, through wgw-window."
+version.workspace = true
+edition.workspace = true
+publish = false
+
+[dependencies]
+wgw-widget.workspace = true
+wgw-scene.workspace = true
+serde_json.workspace = true

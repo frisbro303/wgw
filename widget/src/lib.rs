@@ -465,6 +465,10 @@ impl Scene {
         self.0.layers.push((name.into(), None));
         self
     }
+    /// The scene as patch bytes, as a widget returns it (and as wgw-show sends a scene to its window).
+    pub fn to_bytes(&self) -> Vec<u8> {
+        patch::encode(&self.0)
+    }
 }
 
 // ---- the widget and its exports
