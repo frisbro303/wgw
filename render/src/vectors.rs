@@ -130,6 +130,7 @@ impl Vectors {
         p.mat4(gl, "uProj", &view.proj);
         p.f1(gl, "uScale", data.number("scale", 1.0) as f32);
         p.f1(gl, "uWidth", data.number("width", 0.006) as f32 * view.radius);
+        p.f1(gl, "uLift", data.number("lift", 0.0) as f32);
     }
 
     fn draw_instances(&self, gl: &dyn Gl, g: &Gpu) {

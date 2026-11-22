@@ -8,6 +8,7 @@ struct Uniforms {
   uScale: f32,
   uWidth: f32,
   uLayer: u32,
+  uLift: f32,
 }
 @group(0) @binding(0) var<uniform> u: Uniforms;
 
@@ -41,7 +42,8 @@ fn vs(@location(0) aCorner: vec3<f32>, @location(1) aOrigin: vec3<f32>, @locatio
   else if (part < 4.5) { local = vec3<f32>(cs * R, len - h); n = vec3<f32>(0.0, 0.0, -1.0); }
   else                 { local = vec3<f32>(0.0, 0.0, len - h); n = vec3<f32>(0.0, 0.0, -1.0); }
   let frame = mat3x3<f32>(x, y, z);
-  let p = u.uModelView * vec4<f32>(aOrigin + frame * local, 1.0);
+  var p = u.uModelView * vec4<f32>(aOrigin + frame * local, 1.0);
+  p = vec4<f32>(p.xyz + normalize(-p.xyz) * u.uLift, 1.0);  // toward the camera, so an arrow along a surface shows
   var out: Varyings;
   out.position = u.uProj * p;
   out.pos = p.xyz;

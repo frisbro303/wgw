@@ -427,6 +427,11 @@ impl Layer {
     pub fn visible(self, on: bool) -> Self {
         self.param("visible", on)
     }
+    /// Points' and arrows' lift toward the camera, as a fraction of the scene's size (points 0.02, arrows 0), so
+    /// those lying on a surface aren't half buried in it.
+    pub fn lift(self, lift: f64) -> Self {
+        self.param("lift", lift)
+    }
     /// A mesh's opacity, from 0 to 1 (1, opaque): below 1 it's see-through, drawn over the pane's other layers.
     pub fn opacity(self, opacity: f64) -> Self {
         self.param("opacity", opacity)

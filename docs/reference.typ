@@ -24,7 +24,7 @@ Without `values` or `color`, meshes take the first of the page's colors, and oth
   [`mesh`], [`vertices (n, 3)`, `faces (m, 3)`, `values (n)`], [`flat` (flat shading), `edges` (its triangle grid; by default the widget's `grid`), `edge_color`, `opacity` (1; below 1 see-through, drawn over the pane's other layers)],
   [`points`], [`vertices (n, 3)`, `values (n)`], [`size` (CSS pixels across, 6), `lift` (toward the camera, as a fraction of the scene, so points on a surface sit on it; 0.02)],
   [`lines`], [`vertices (n, 3)`, `segments (s, 2)`, `values (n)`], [`width` (CSS pixels, 2), `closed` (join the last vertex to the first)],
-  [`vectors`], [`vertices (n, 3)` (the origins), `vectors (n, 3)`, `values (n)`], [`scale` (1), `width` (the shaft's radius, as a fraction of the scene, 0.006)],
+  [`vectors`], [`vertices (n, 3)` (the origins), `vectors (n, 3)`, `values (n)`], [`scale` (1), `width` (the shaft's radius, as a fraction of the scene, 0.006), `lift` (toward the camera, as for points; 0)],
 )
 
 A vertex with a coordinate that isn't a number (NaN) isn't drawn, nor are the segments and faces that use it.

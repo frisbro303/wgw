@@ -39,7 +39,7 @@ PARAMS = {
     "mesh": COMMON | {"flat", "edges", "edge_color", "opacity"},
     "points": COMMON | {"size", "lift"},
     "lines": COMMON | {"width", "closed"},
-    "vectors": COMMON | {"scale", "width"},
+    "vectors": COMMON | {"scale", "width", "lift"},
 }
 
 

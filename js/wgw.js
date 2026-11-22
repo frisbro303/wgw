@@ -101,7 +101,7 @@ const STYLE = `
 .wgw-controls input[type=checkbox]::after{content:"";width:6px;height:6px;border-radius:1px;background:var(--c);transform:scale(0);transition:transform .12s}
 .wgw-controls input[type=checkbox]:checked::after{transform:scale(1)}
 .wgw-controls input[type=checkbox]:focus-visible{box-shadow:0 0 0 4px var(--faint)}
-.wgw-controls .wgw-text{font-variant-numeric:tabular-nums;opacity:.8}
+.wgw-controls .wgw-text{flex-basis:100%;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-variant-numeric:tabular-nums;opacity:.8}
 .wgw-controls button{--c:var(--wgw-control,currentColor);font:inherit;color:inherit;background:none;border:1.5px solid var(--c);border-radius:4px;padding:1px 10px;cursor:pointer;transition:background .12s}
 .wgw-controls button:hover{background:color-mix(in srgb,var(--c) 12%,transparent)}
 .wgw-controls button:active{background:color-mix(in srgb,var(--c) 25%,transparent)}
