@@ -15,12 +15,14 @@ export function animates(patch) {
 }
 
 // CONTROLS, from any language, as inputs: [min, max, start, step?] is a slider, with "log" anywhere after start
-// for one that moves evenly in powers of ten (for parameters spanning orders of magnitude); true/false a checkbox.
+// for one that moves evenly in powers of ten (for parameters spanning orders of magnitude); true/false a checkbox;
+// "button" a push button, whose value is how many times it has been pressed.
 // A log slider's min, max, value and step are in log10 units; widgets get 10 ** value.
 export function controlInputs(raw) {
   const out = {};
   for (const [name, c] of Object.entries(raw || {})) {
     if (typeof c === "boolean") { out[name] = { type: "checkbox", value: c }; continue; }
+    if (c === "button") { out[name] = { type: "button", value: 0 }; continue; }
     const log = c.slice(3).includes("log"), step = c.slice(3).find((x) => typeof x === "number");
     const [lo, hi, start] = [+c[0], +c[1], +c[2]].map(log ? Math.log10 : (x) => x);
     out[name] = { type: "range", log, min: lo, max: hi, value: start, step: log ? 0.01 : step !== undefined ? step : (hi - lo) / 200 };

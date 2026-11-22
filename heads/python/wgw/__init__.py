@@ -28,7 +28,7 @@ from pathlib import Path
 
 import numpy as np
 
-__all__ = ["Figure", "Mesh", "Points", "Lines", "Vectors", "Slider", "State", "encode", "read", "write"]
+__all__ = ["Figure", "Mesh", "Points", "Lines", "Vectors", "Slider", "Button", "State", "encode", "read", "write"]
 
 INTS = ("faces", "segments")  # stored as uint32; every other array as float32
 PROTOCOL = "1"  # what this head speaks to wgw-window (docs/heads.typ)
@@ -198,6 +198,17 @@ class Slider:
         self.spec = [min, max, value] + ([step] if step is not None else []) + (["log"] if log else [])
 
 
+class Button:
+    """A push button: state[name] is how many times it has been pressed, and each press asks for a new scene."""
+
+    spec = "button"
+
+
+def _start(c):
+    """A control's starting value: a slider's start, a button's 0 presses, a checkbox's state."""
+    return c.spec[2] if isinstance(c, Slider) else 0 if isinstance(c, Button) else bool(c)
+
+
 class State(dict):
     """What a scene is for: the controls' values by name (state["t"]), and the picks so far, the latest last, each
     {"vertex", "layer", "point", "frame"}."""
@@ -223,7 +234,7 @@ class Figure:
 
     scene: a .wgw file (a path or its bytes: a widget, or a mesh); its layers (a dict by name, or one layer); or a
         function of a State returning them, called again whenever a control moves or a point is picked.
-    controls: sliders and checkboxes (True or False) by name, for a function.
+    controls: sliders, buttons and checkboxes (True or False) by name, for a function.
     up: the axis that points up: "x", "y" or "z".
     view: the starting camera: (turn, tilt) in degrees, or (turn, tilt, scale).
     pick: when a pick reaches the function: "click", "hover" or "none".
@@ -247,7 +258,7 @@ class Figure:
         self.scene, self.controls, self.title, self.height = scene, dict(controls or {}), title, height
         self.options = {"up": up, "view": list(view), "pick": pick, "flat": flat}
         self.setup = {
-            "controls": {k: c.spec if isinstance(c, Slider) else bool(c) for k, c in self.controls.items()},
+            "controls": {k: c.spec if isinstance(c, (Slider, Button)) else bool(c) for k, c in self.controls.items()},
             "frames": 1, "fps": fps, "loop": loop, "keepPicks": keep_picks,
             "grid": {"toggle": bool(grid_toggle)} if grid_toggle is not None else bool(grid),
             "picked": picked, "panes": list(panes) if panes is not None else None,
@@ -259,7 +270,7 @@ class Figure:
     def render(self, lines):
         """The patch's bytes for a state, as wgw-window sends it: `control <value> <name>` and
         `pick <vertex> <frame> <x> <y> <z> <layer>` lines."""
-        values = {k: c.spec[2] if isinstance(c, Slider) else bool(c) for k, c in self.controls.items()}
+        values = {k: _start(c) for k, c in self.controls.items()}
         picks = []
         for line in lines.splitlines():
             word = line.split(" ", 6)

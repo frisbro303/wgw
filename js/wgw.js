@@ -100,7 +100,11 @@ const STYLE = `
 .wgw-controls input[type=checkbox]{-webkit-appearance:none;appearance:none;width:12px;height:12px;border:1.5px solid var(--c);border-radius:3px;display:grid;place-content:center}
 .wgw-controls input[type=checkbox]::after{content:"";width:6px;height:6px;border-radius:1px;background:var(--c);transform:scale(0);transition:transform .12s}
 .wgw-controls input[type=checkbox]:checked::after{transform:scale(1)}
-.wgw-controls input[type=checkbox]:focus-visible{box-shadow:0 0 0 4px var(--faint)}`;
+.wgw-controls input[type=checkbox]:focus-visible{box-shadow:0 0 0 4px var(--faint)}
+.wgw-controls button{--c:var(--wgw-control,currentColor);font:inherit;color:inherit;background:none;border:1.5px solid var(--c);border-radius:4px;padding:1px 10px;cursor:pointer;transition:background .12s}
+.wgw-controls button:hover{background:color-mix(in srgb,var(--c) 12%,transparent)}
+.wgw-controls button:active{background:color-mix(in srgb,var(--c) 25%,transparent)}
+.wgw-controls button:focus-visible{outline:none;box-shadow:0 0 0 4px color-mix(in srgb,var(--c) 22%,transparent)}`;
 
 const viewers = [];
 let widgetCount = 0;
@@ -434,6 +438,8 @@ export class Viewer {
     const toggle = info.grid && typeof info.grid === "object";
     this.core.set_grid(toggle ? !!info.grid.toggle : !!info.grid);
     if (info.panes) this.core.set_pane_widths(Float32Array.from(info.panes));
+    if (info.layout) this.core.set_pane_layout(Float32Array.from(info.layout.flat()));  // [[x, y, w, h], ...]
+    if (info.links) this.core.set_pane_links(Float32Array.from(info.links.flatMap((g) => [...g, -1])));  // [[1, 2], ...]
     if (info.picked != null) this.picks = [{ vertex: info.picked, layer: "mesh", point: null, frame: 0 }];  // its starting pick
     this.buildControls(controlInputs({ ...info.controls, ...(toggle ? { grid: !!info.grid.toggle } : {}) }));
     this.revealWhenIdle = true;  // once its first scene is drawn
@@ -442,6 +448,13 @@ export class Viewer {
 
   buildControls(spec) {
     for (const [name, c] of Object.entries(spec)) {
+      if (c.type === "button") {  // a push button: the widget gets how many times it has been pressed
+        const button = Object.assign(document.createElement("button"), { type: "button", textContent: name });
+        this.controls[name] = 0;
+        button.addEventListener("click", () => { this.controls[name] += 1; this.update(false); });
+        this.controlsEl.appendChild(button);
+        continue;
+      }
       const label = document.createElement("label"), input = document.createElement("input"), output = document.createElement("output");
       const actual = (x) => (c.log ? 10 ** x : x);  // what the widget gets
       const show = formatter(c);

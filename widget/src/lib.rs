@@ -185,6 +185,15 @@ impl State {
         }
     }
 
+    /// How many times a button has been pressed (0 before the first press). Panics if the widget has no button of
+    /// that name.
+    pub fn presses(&self, name: &str) -> u32 {
+        match self.values.get(name) {
+            Some(v) => v.as_f64().unwrap_or_else(|| panic!("the control {name:?} is a checkbox: use state.checked")) as u32,
+            None => panic!("no button named {name:?}; the controls are {}", self.names()),
+        }
+    }
+
     /// A checkbox's state. Panics if the widget has no checkbox of that name.
     pub fn checked(&self, name: &str) -> bool {
         match self.values.get(name) {
@@ -241,6 +250,8 @@ pub struct Setup {
     grid: Option<Value>,
     picked: Option<u32>,
     panes: Option<Vec<f64>>,
+    layout: Option<Vec<[f64; 4]>>,
+    links: Vec<Vec<u32>>,
     keep_picks: bool,
 }
 
@@ -261,6 +272,11 @@ impl Setup {
     }
     pub fn checkbox(mut self, name: &str, checked: bool) -> Self {
         self.controls.insert(name.into(), json!(checked));
+        self
+    }
+    /// A push button: `state.presses(name)` counts its presses, and each press asks for a new scene.
+    pub fn button(mut self, name: &str) -> Self {
+        self.controls.insert(name.into(), json!("button"));
         self
     }
     /// An animation of `n` frames (looping, at 30 per second unless set). Layers a frame after the first leaves out
@@ -299,6 +315,18 @@ impl Setup {
         self.panes = Some(widths.to_vec());
         self
     }
+    /// Each pane's place, `[x, y, width, height]` as fractions of the figure from its top left: panes in a grid,
+    /// say, rather than side by side. Pane k is the layers with `.pane(k)`.
+    pub fn layout(mut self, rects: &[[f64; 4]]) -> Self {
+        self.layout = Some(rects.to_vec());
+        self
+    }
+    /// Panes that turn and zoom together (as one camera); each keeps its own fit, so each turns about its own
+    /// center. Call once per group.
+    pub fn link(mut self, panes: &[u32]) -> Self {
+        self.links.push(panes.to_vec());
+        self
+    }
     /// Keep every pick (each click adds one) rather than only the latest.
     pub fn keep_picks(mut self) -> Self {
         self.keep_picks = true;
@@ -309,6 +337,7 @@ impl Setup {
     fn defaults(&self) -> Map<String, Value> {
         self.controls.iter().map(|(name, spec)| (name.clone(), match spec {
             Value::Array(s) => s[2].clone(),
+            Value::String(kind) if kind == "button" => json!(0),
             other => other.clone(),
         })).collect()
     }
@@ -322,6 +351,8 @@ impl Setup {
             "grid": self.grid.clone().unwrap_or(json!(false)),
             "picked": self.picked,
             "panes": self.panes,
+            "layout": self.layout,
+            "links": self.links,
             "keepPicks": self.keep_picks,
         })
     }
@@ -674,6 +705,14 @@ mod tests {
     #[should_panic(expected = "is a checkbox")]
     fn a_checkbox_read_as_a_slider_panics() {
         state(json!({ "smooth": false })).value("smooth");
+    }
+
+    #[test]
+    fn a_button_counts_its_presses() {
+        let setup = Setup::new().button("again");
+        assert_eq!(setup.to_json()["controls"]["again"], json!("button"));
+        assert_eq!(setup.defaults()["again"], json!(0));
+        assert_eq!(state(json!({ "again": 3 })).presses("again"), 3);
     }
 
     #[test]

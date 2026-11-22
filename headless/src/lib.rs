@@ -211,6 +211,9 @@ fn stage(figure: &Figure, mesh: &[u8], setup: &[u8], scene: &[u8]) -> Result<Sta
     let at = |i: usize, d: f32| view.get(i).copied().unwrap_or(d);
     r.set_options(figure.up.as_deref().unwrap_or("z"), at(0, -60.0), at(1, 20.0), at(2, 1.0), true);
     r.set_pane_widths(panes);
+    let numbers = |v: &Value| v.as_array().map(|a| a.iter().filter_map(|x| x.as_f64().map(|x| x as f32)).collect::<Vec<f32>>()).unwrap_or_default();
+    r.set_pane_layout(setup["layout"].as_array().map(|rects| rects.iter().flat_map(numbers).collect()).unwrap_or_default());
+    r.set_pane_links(setup["links"].as_array().map(|g| g.iter().flat_map(|g| { let mut v = numbers(g); v.push(-1.0); v }).collect()).unwrap_or_default());
     if !mesh.is_empty() {
         let format = if mesh.starts_with(b"WGW1") { "wgw" } else { "obj" };
         r.set_mesh_file("mesh", &mesh_file::parse(mesh, format)?)?;

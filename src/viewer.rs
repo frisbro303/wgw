@@ -132,6 +132,12 @@ impl Viewer {
     pub fn set_pane_widths(&mut self, widths: Vec<f32>) {
         self.0.set_pane_widths(widths)
     }
+    pub fn set_pane_layout(&mut self, rects: Vec<f32>) {
+        self.0.set_pane_layout(rects)
+    }
+    pub fn set_pane_links(&mut self, groups: Vec<f32>) {
+        self.0.set_pane_links(groups)
+    }
     pub fn current_frame(&self) -> u32 {
         self.0.current_frame()
     }

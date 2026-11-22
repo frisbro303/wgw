@@ -44,6 +44,11 @@ pub struct Renderer {
     fits: Vec<Option<Fit>>,
     /// The panes' relative widths, when they aren't equal.
     pane_widths: Vec<f32>,
+    /// Each pane's place, `[x, y, width, height]` as fractions of the canvas from its top left, when set: panes
+    /// anywhere (a grid, say), not only side by side.
+    pane_layout: Vec<[f32; 4]>,
+    /// Groups of panes that turn and zoom together: each keeps its own fit, so each turns about its own center.
+    links: Vec<Vec<usize>>,
     fitted: u64,
     animation: Animation,
     frame: usize,
@@ -80,6 +85,8 @@ impl Renderer {
             active: 0,
             fits: Vec::new(),
             pane_widths: Vec::new(),
+            pane_layout: Vec::new(),
+            links: Vec::new(),
             fitted: 0,
             animation: Animation { start: f64::NEG_INFINITY, fps: 30.0, looped: false },
             frame: 0,
@@ -257,10 +264,10 @@ impl Renderer {
         self.pointers.push((id, x, y));
         self.press = (self.pointers.len() == 1).then_some(0.0);
         if self.pointers.len() == 1 {
-            let px = (x * self.dpr) as i32;
-            self.active = (0..self.cameras.len()).find(|&i| { let (x0, w) = self.pane_rect(i); px >= x0 && px < x0 + w }).unwrap_or(0);
+            self.active = self.pane_at(x, y).filter(|&i| i < self.cameras.len()).unwrap_or(0);
         }
         self.cam().velocity = (0.0, 0.0);
+        self.link();
         self.last_move = now;
     }
 
@@ -289,6 +296,7 @@ impl Renderer {
         }
         self.pointers[i] = (id, x, y);
         self.last_move = now;
+        self.link();
         true
     }
 
@@ -303,6 +311,7 @@ impl Renderer {
         if click || now - self.last_move > 60.0 || self.reduced_motion {
             self.cam().velocity = (0.0, 0.0); // held still before letting go: no glide
         }
+        self.link();
         self.press = None;
         click
     }
@@ -320,8 +329,9 @@ impl Renderer {
         if pane >= self.fits.len().max(1) {
             return None;
         }
-        let (x0, w) = self.pane_rect(pane);
-        Some(vec![(x0 as f32 + w as f32 / 2.0) / self.dpr, self.size.1 as f32 / 2.0 / self.dpr])
+        let (x0, y0, w, h) = self.pane_rect(pane);
+        let top = self.size.1 as i32 - (y0 + h); // the rect's top edge, from the canvas's top
+        Some(vec![(x0 as f32 + w as f32 / 2.0) / self.dpr, (top as f32 + h as f32 / 2.0) / self.dpr])
     }
 
     pub fn zoom_by(&mut self, factor: f32) {
@@ -333,6 +343,18 @@ impl Renderer {
     /// The panes' relative widths, `[2, 1]` for a first pane twice as wide as the second; empty for equal panes.
     pub fn set_pane_widths(&mut self, widths: Vec<f32>) {
         self.pane_widths = widths;
+    }
+
+    /// Each pane's place: `[x, y, width, height]` per pane, flattened, as fractions of the canvas from its top
+    /// left; empty for side by side. Panes it leaves out are drawn nowhere.
+    pub fn set_pane_layout(&mut self, rects: Vec<f32>) {
+        self.pane_layout = rects.chunks_exact(4).map(|r| [r[0], r[1], r[2], r[3]]).collect();
+    }
+
+    /// Groups of panes that turn and zoom together, flattened: each group its panes' indices, groups separated
+    /// by a negative number (`[1, 2, 3, -1, 4, 5]`). Each pane keeps its own fit, so each turns about its own center.
+    pub fn set_pane_links(&mut self, groups: Vec<f32>) {
+        self.links = groups.split(|g| *g < 0.0).map(|g| g.iter().map(|&i| i as usize).collect::<Vec<_>>()).filter(|g| g.len() > 1).collect();
     }
 
     /// How many frames the scene's animation has (1 for none).
@@ -402,8 +424,8 @@ impl Renderer {
         if px < 0 || py < 0 || px >= w || py >= h {
             return None;
         }
-        let pane = (0..self.fits.len()).find(|&i| { let (x0, pw) = self.pane_rect(i); px >= x0 && px < x0 + pw })?;
-        let (x0, pw) = self.pane_rect(pane);
+        let pane = self.pane_at(x, y).filter(|&i| i < self.fits.len())?;
+        let (x0, y0, pw, ph) = self.pane_rect(pane);
         let view = self.view(self.fits[pane]?, pane);
         let mut pixel = [0u8; 4];
         let gl = self.gl.as_ref();
@@ -425,7 +447,7 @@ impl Renderer {
                 self.pick_target = Some(PickTarget { size: (w, h), ..t });
             }
             gl.bind_framebuffer(glow::FRAMEBUFFER, Some(self.pick_target.as_ref().unwrap().framebuffer));
-            gl.viewport(x0, 0, pw, h);
+            gl.viewport(x0, y0, pw, ph);
             gl.enable(glow::SCISSOR_TEST);
             gl.scissor(px, py, 1, 1); // only the pixel under the pointer is drawn
             gl.clear_color(0.0, 0.0, 0.0, 0.0);
@@ -449,7 +471,7 @@ impl Renderer {
 
         // The ray through the pixel, in the layers' own units.
         let inverse = (view.proj * view.model_view).inverse();
-        let ndc = Vec2::new(2.0 * ((px - x0) as f32 + 0.5) / pw as f32 - 1.0, 2.0 * (py as f32 + 0.5) / h as f32 - 1.0);
+        let ndc = Vec2::new(2.0 * ((px - x0) as f32 + 0.5) / pw as f32 - 1.0, 2.0 * ((py - y0) as f32 + 0.5) / ph as f32 - 1.0);
         let near = inverse * Vec4::new(ndc.x, ndc.y, -1.0, 1.0);
         let far = inverse * Vec4::new(ndc.x, ndc.y, 1.0, 1.0);
         let (near, far) = (near.xyz() / near.w, far.xyz() / far.w);
@@ -509,18 +531,49 @@ impl Renderer {
         }
     }
 
-    /// Pane i's left edge and width, in device pixels: the panes split the canvas side by side, by their widths.
-    fn pane_rect(&self, i: usize) -> (i32, i32) {
+    /// Pane i's rect in device pixels, GL's way: (left, bottom, width, height). The pane layout's, or else the
+    /// panes split the canvas side by side, by their widths.
+    fn pane_rect(&self, i: usize) -> (i32, i32, i32, i32) {
+        let (w, h) = (self.size.0 as f32, self.size.1 as f32);
+        if !self.pane_layout.is_empty() {
+            let Some(&[x, y, pw, ph]) = self.pane_layout.get(i) else { return (0, 0, 0, 0) };
+            let (x0, x1) = ((x * w).round() as i32, ((x + pw) * w).round() as i32);
+            let (top, bottom) = ((y * h).round() as i32, ((y + ph) * h).round() as i32);
+            return (x0, self.size.1 as i32 - bottom, x1 - x0, bottom - top);
+        }
         let n = self.fits.len().max(1);
         let weight = |k: usize| self.pane_widths.get(k).copied().filter(|w| *w > 0.0).unwrap_or(1.0);
         let total: f32 = (0..n).map(weight).sum();
-        let edge = |k: usize| ((0..k).map(weight).sum::<f32>() / total * self.size.0 as f32).round() as i32;
-        (edge(i), edge(i + 1) - edge(i))
+        let edge = |k: usize| ((0..k).map(weight).sum::<f32>() / total * w).round() as i32;
+        (edge(i), 0, edge(i + 1) - edge(i), self.size.1 as i32)
+    }
+
+    /// The pane under a point, in CSS pixels from the canvas's top left.
+    fn pane_at(&self, x: f32, y: f32) -> Option<usize> {
+        let px = (x * self.dpr) as i32;
+        let py = self.size.1 as i32 - 1 - (y * self.dpr) as i32;
+        (0..self.fits.len().max(1)).find(|&i| {
+            let (x0, y0, w, h) = self.pane_rect(i);
+            px >= x0 && px < x0 + w && py >= y0 && py < y0 + h
+        })
+    }
+
+    /// Give the panes linked to the active one its camera (turn, zoom, glide), so they move as one.
+    fn link(&mut self) {
+        let a = self.active;
+        let Some(camera) = self.cameras.get(a).cloned() else { return };
+        for group in self.links.iter().filter(|g| g.contains(&a)) {
+            for &j in group {
+                if j != a && j < self.cameras.len() {
+                    self.cameras[j] = camera.clone();
+                }
+            }
+        }
     }
 
     fn view(&self, fit: Fit, pane: usize) -> View {
-        let (_, pw) = self.pane_rect(pane);
-        let (pw, h) = (pw.max(1) as f32, self.size.1 as f32);
+        let (_, _, pw, ph) = self.pane_rect(pane);
+        let (pw, h) = (pw.max(1) as f32, ph.max(1) as f32);
         let (view, proj) = self.cameras.get(pane).unwrap_or(&self.camera).matrices(pw / h);
         View { model_view: view * fit.model(), proj, viewport: Vec2::new(pw, h), dpr: self.dpr, radius: fit.radius }
     }
@@ -535,8 +588,11 @@ impl Renderer {
         }
         for pane in 0..self.fits.len() {
             let Some(fit) = self.fits[pane] else { continue };
-            let (x0, pw) = self.pane_rect(pane);
-            unsafe { gl.viewport(x0, 0, pw, self.size.1 as i32) };
+            let (x0, y0, pw, ph) = self.pane_rect(pane);
+            if pw <= 0 || ph <= 0 {
+                continue;
+            }
+            unsafe { gl.viewport(x0, y0, pw, ph) };
             let view = self.view(fit, pane);
             for layer in self.layers.iter().filter(|l| pane_of(l) == pane) {
                 if layer.data.flag("visible", true) {

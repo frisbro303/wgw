@@ -37,10 +37,12 @@ arguments' lengths, reads the arguments through the import `typst_env.wasm_minim
 hands its result to `typst_env.wasm_minimal_protocol_send_result_to_host`, and returns 0 (or 1, with an error
 message as the result). So a page and Typst run the same file. `wgw-widget` implements it for Rust.
 
-- `setup(mesh)` returns JSON: `{controls, frames, fps, loop, grid, picked, panes, keepPicks}`. `controls` are by
+- `setup(mesh)` returns JSON: `{controls, frames, fps, loop, grid, picked, panes, layout, links, keepPicks}`. `controls` are by
   name: `[min, max, start, step?, "log"?]` for a slider (with `"log"`, it moves evenly in powers of ten), `true`
-  or `false` for a checkbox. `grid` is a boolean, or `{"toggle": on}` for a checkbox readers can use. `picked` is a
-  vertex of the layer `mesh` picked from the start.
+  or `false` for a checkbox, `"button"` for a push button (its value is how many times it has been pressed, from 0). `grid` is a boolean, or `{"toggle": on}` for a checkbox readers can use. `picked` is a
+  vertex of the layer `mesh` picked from the start. `panes` are side-by-side panes' relative widths; `layout` places
+  panes anywhere, `[[x, y, width, height], ...]` as fractions of the figure from its top left; `links` are groups of
+  panes that turn and zoom together, `[[1, 2, 3], ...]`, each pane keeping its own fit.
 - `scene(mesh, state)` returns a patch (below) for a state, JSON:
   `{controls: {name: value}, picks: [{vertex, layer, point, frame}], frame}`. For an animation it's asked for each
   frame; a layer a later frame leaves out stays as it is in frame 0.

@@ -46,7 +46,7 @@ out = "../../figures/{dir}.wgw"
 
 - `setup` says what the widget is: its controls, frames, panes, grid and starting pick.
 - `scene` builds the scene for a `State`: the controls' values (`state.value("R")`, `state.checked("smooth")`),
-  the picks (`state.pick()`, `state.picks`) and the animation frame (`state.frame`). It's called at the start and
+  the presses of a button (`Setup::button("again")`, then `state.presses("again")`), the picks (`state.pick()`, `state.picks`) and the animation frame (`state.frame`). It's called at the start and
   whenever a control or a pick changes; it returns every layer it shows.
 
 A panic in either shows on the figure as its message (`error: ...`), and the page starts the widget afresh for its
@@ -108,3 +108,8 @@ are done, they're dropped for the newer state's.
 
 Layers with `.pane(1)` are drawn in a second view beside the first, with its own camera and fit;
 `Setup::panes(&[2.0, 1.0])` gives the first two thirds of the width. Each pane turns on its own.
+
+Any number of panes can be placed anywhere: `.pane(k)` puts a layer in pane k, and
+`Setup::layout(&[[x, y, width, height], ...])` places each pane, as fractions of the figure from its top left
+(a large view on the left and a grid of small ones on the right, say). `Setup::link(&[1, 2, 3])` makes panes turn
+and zoom together, as one camera, while each keeps its own fit: a row of shapes, each turning about its own center.
