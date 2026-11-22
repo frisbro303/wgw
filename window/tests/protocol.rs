@@ -59,7 +59,7 @@ fn triangle() -> Vec<u8> {
         ],
         ..Default::default()
     };
-    encode(&Patch { layers: vec![("mesh".into(), Some(layer))] })
+    encode(&Patch { layers: vec![("mesh".into(), Some(layer))], text: None })
 }
 
 /// POST a state to a figure's scene, as the page does: the status and the body.

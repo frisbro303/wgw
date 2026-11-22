@@ -57,8 +57,10 @@ then raw little-endian arrays (`f4` floats, `u4` integers), each at an offset fr
 file's header is `{"arrays": {name: {dtype, shape, offset}}}`; a patch's:
 
 ```json
-{"layers": [[name, null | {"type", "params": {...}, "remove": [...], "arrays": {key: {"dtype", "shape", "offset"}}}]]}
+{"layers": [[name, null | {"type", "params": {...}, "remove": [...], "arrays": {key: {"dtype", "shape", "offset"}}}]], "text": "..."}
 ```
+
+`text`, optional, is a line shown under the figure, beside its controls (a step count, say).
 
 `null` removes a layer. Otherwise the layer becomes exactly what's given: its parameters are replaced, the arrays
 in `remove` dropped and those in `arrays` set; arrays not mentioned stay as they were (a widget recoloring the

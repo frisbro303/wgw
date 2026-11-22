@@ -155,7 +155,7 @@ export async function instantiate(bytes) {
 const TYPES = { f4: Float32Array, u4: Uint32Array };
 
 // A patch from its bytes ("WGW1", the header's length, a JSON header, the arrays) as the viewer applies it:
-// {layers: {name: null | {type, params, remove, arrays: {key: {data, shape}}}}}.
+// {layers: {name: null | {type, params, remove, arrays: {key: {data, shape}}}}, text?}.
 export function decodePatch(bytes) {
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   if (text.decode(bytes.subarray(0, 4)) !== "WGW1") throw new Error("the widget's result isn't a patch");
@@ -172,14 +172,14 @@ export function decodePatch(bytes) {
     }
     layers[name] = { type: l.type, params: l.params, remove: l.remove, arrays };
   }
-  return { layers };
+  return header.text === undefined ? { layers } : { layers, text: header.text };
 }
 
 // Frames' patches as one: each array gets a leading frames axis (faces and segments, the same in every frame,
 // are taken from the first), parameters from the first. A layer only frame 0 has is the same in every frame.
 export function stackFrames(patches) {
   if (patches.length === 1) return patches[0];
-  const first = patches[0], out = { layers: {} };
+  const first = patches[0], out = { layers: {}, ...(first.text === undefined ? {} : { text: first.text }) };
   for (const [name, l] of Object.entries(first.layers)) {
     if (l === null) { out.layers[name] = null; continue; }
     if (!(name in patches[1].layers)) { out.layers[name] = l; continue; }  // unchanging: sent once

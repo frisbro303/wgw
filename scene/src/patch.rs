@@ -27,6 +27,8 @@ pub struct LayerPatch {
 #[derive(Clone, Debug, Default)]
 pub struct Patch {
     pub layers: Vec<(String, Option<LayerPatch>)>,
+    /// A line of text the figure shows under it (a step count, say); none leaves what's shown.
+    pub text: Option<String>,
 }
 
 /// The patch as bytes.
@@ -49,7 +51,11 @@ pub fn encode(patch: &Patch) -> Vec<u8> {
         }
         layers.push(json!([name, { "type": l.kind, "params": l.params, "remove": l.remove, "arrays": arrays }]));
     }
-    let mut header = json!({ "layers": layers }).to_string().into_bytes();
+    let mut header = json!({ "layers": layers });
+    if let Some(text) = &patch.text {
+        header["text"] = json!(text);
+    }
+    let mut header = header.to_string().into_bytes();
     while (8 + header.len()) % 4 != 0 {
         header.push(b' '); // the arrays start 4-byte aligned
     }
@@ -71,7 +77,7 @@ pub fn decode(bytes: &[u8]) -> Result<Patch, String> {
     let header: Value = serde_json::from_slice(bytes.get(8..start).ok_or("the patch's header is cut short")?)
         .map_err(|e| format!("the patch's header: {e}"))?;
     let data = &bytes[start..];
-    let mut patch = Patch::default();
+    let mut patch = Patch { text: header["text"].as_str().map(str::to_string), ..Patch::default() };
     for entry in header["layers"].as_array().ok_or("a patch needs layers")? {
         let name = entry[0].as_str().ok_or("a layer needs a name")?.to_string();
         let l = &entry[1];
@@ -109,7 +115,7 @@ pub fn stack(mut patches: Vec<Patch>) -> Patch {
     if patches.len() == 1 {
         return patches.pop().unwrap();
     }
-    let mut out = Patch::default();
+    let mut out = Patch { text: patches[0].text.clone(), ..Patch::default() };
     for (name, layer) in &patches[0].layers {
         let Some(layer) = layer else {
             out.layers.push((name.clone(), None));
@@ -156,7 +162,7 @@ mod tests {
                 ("segments".into(), NdArray::new(Data::U32(vec![0, 1]), vec![1, 2]).unwrap()),
             ],
         };
-        let patch = Patch { layers: vec![("curve".into(), Some(layer)), ("gone".into(), None)] };
+        let patch = Patch { layers: vec![("curve".into(), Some(layer)), ("gone".into(), None)], text: Some("step 3".into()) };
         let bytes = encode(&patch);
         let back = decode(&bytes).unwrap();
         assert_eq!(back.layers.len(), 2);

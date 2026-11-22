@@ -500,6 +500,11 @@ impl Scene {
         self.0.layers.push((name.into(), None));
         self
     }
+    /// A line of text shown under the figure, beside its controls: a step count, say.
+    pub fn text(mut self, text: impl Into<String>) -> Self {
+        self.0.text = Some(text.into());
+        self
+    }
     /// The scene as patch bytes, as a widget returns it (and as wgw-show sends a scene to its window).
     pub fn to_bytes(&self) -> Vec<u8> {
         patch::encode(&self.0)

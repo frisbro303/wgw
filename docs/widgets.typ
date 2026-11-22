@@ -54,7 +54,8 @@ next scene.
 
 = Layers
 
-A scene is layers by name: `Scene::new().layer("name", layer)`, or `.remove("name")`. Each kind is built from its
+A scene is layers by name: `Scene::new().layer("name", layer)`, or `.remove("name")`, and `.text("round 3, step 2")`
+for a line of text under the figure. Each kind is built from its
 arrays, then given parameters:
 
 ```rust
