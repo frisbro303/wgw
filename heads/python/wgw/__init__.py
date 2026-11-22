@@ -36,7 +36,7 @@ PROTOCOL = "1"  # what this head speaks to wgw-window (docs/heads.typ)
 # Each kind's parameters (besides values and range), as wgw's reference lists them.
 COMMON = {"color", "colors", "min", "max", "visible", "pickable", "pane"}
 PARAMS = {
-    "mesh": COMMON | {"flat", "edges", "edge_color"},
+    "mesh": COMMON | {"flat", "edges", "edge_color", "opacity"},
     "points": COMMON | {"size", "lift"},
     "lines": COMMON | {"width", "closed"},
     "vectors": COMMON | {"scale", "width"},

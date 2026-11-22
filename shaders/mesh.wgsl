@@ -7,6 +7,7 @@ struct Uniforms {
   uRange: vec2<f32>,
   uFlat: i32,
   uLayer: u32,
+  uOpacity: f32,
 }
 @group(0) @binding(0) var<uniform> u: Uniforms;
 
@@ -34,7 +35,7 @@ fn vs(@location(0) aPos: vec3<f32>, @location(1) aNormal: vec3<f32>, @location(2
 @fragment
 fn fs(in: Varyings) -> @location(0) vec4<f32> {
   let n = normalize(select(in.normal, cross(dpdx(in.pos), dpdy(in.pos)), u.uFlat != 0));
-  return vec4<f32>(shade(colormap(in.value, u.uRange), n, in.pos), 1.0);
+  return vec4<f32>(shade(colormap(in.value, u.uRange), n, in.pos), u.uOpacity);
 }
 
 // Each triangle in its provoking (last) vertex's id, refined to the nearest vertex on the CPU.

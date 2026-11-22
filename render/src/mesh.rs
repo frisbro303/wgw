@@ -103,6 +103,8 @@ impl Primitive for Mesh {
         let range = data.range();
         p.f2(gl, "uRange", range.x, range.y);
         p.i1(gl, "uFlat", data.flag("flat", false) as i32);
+        let opacity = data.number("opacity", 1.0).clamp(0.0, 1.0) as f32;
+        p.f1(gl, "uOpacity", opacity);
         gl::bind_texture(gl, p, "uMap", g.colormap);
         unsafe {
             gl.bind_vertex_array(Some(g.vao));
@@ -111,7 +113,13 @@ impl Primitive for Mesh {
                 gl.enable(glow::POLYGON_OFFSET_FILL);
                 gl.polygon_offset(1.0, 1.0);
             }
+            if opacity < 1.0 {
+                // see-through: blended over what's drawn already (the renderer draws such layers last)
+                gl.enable(glow::BLEND);
+                gl.blend_func_separate(glow::SRC_ALPHA, glow::ONE_MINUS_SRC_ALPHA, glow::ONE, glow::ONE_MINUS_SRC_ALPHA);
+            }
             gl.draw_elements(glow::TRIANGLES, self.count, glow::UNSIGNED_INT, 0);
+            gl.disable(glow::BLEND);
             gl.disable(glow::POLYGON_OFFSET_FILL);
             if edges {
                 let e = &shaders.edges;

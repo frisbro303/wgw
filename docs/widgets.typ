@@ -67,7 +67,7 @@ Vectors::new(origins, vectors)
 - `.values(v)`: a number per vertex, colored through the layer's colors (`.colors(&[...])`, or the page's) over
   `.range(min, max)` (0 to 1 by default); or `.color("...")`, one color.
 - Colors are CSS: `"var(--link)"` and `color-mix(...)` follow the page's theme.
-- `.width(px)` for curves, `.size(px)` for points, `.flat(true)` for meshes, `.pane(1)` for a second view beside
+- `.width(px)` for curves, `.size(px)` for points, `.flat(true)` and `.opacity(0.8)` for meshes, `.pane(1)` for a second view beside
   the first, `.pickable(false)`, `.visible(false)`, and `.param(name, value)` for any other (see the
   #link("/reference/")[reference]).
 

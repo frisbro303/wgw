@@ -594,9 +594,13 @@ impl Renderer {
             }
             unsafe { gl.viewport(x0, y0, pw, ph) };
             let view = self.view(fit, pane);
-            for layer in self.layers.iter().filter(|l| pane_of(l) == pane) {
-                if layer.data.flag("visible", true) {
-                    layer.primitive.draw(gl, &self.shaders, &view, &layer.data, &self.style);
+            // see-through meshes (opacity below 1) last, so what they cover is drawn under them
+            let see_through = |l: &Layer| l.data.kind == Kind::Mesh && l.data.number("opacity", 1.0) < 1.0;
+            for last in [false, true] {
+                for layer in self.layers.iter().filter(|l| pane_of(l) == pane && see_through(l) == last) {
+                    if layer.data.flag("visible", true) {
+                        layer.primitive.draw(gl, &self.shaders, &view, &layer.data, &self.style);
+                    }
                 }
             }
         }

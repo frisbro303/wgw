@@ -419,6 +419,10 @@ impl Layer {
     pub fn visible(self, on: bool) -> Self {
         self.param("visible", on)
     }
+    /// A mesh's opacity, from 0 to 1 (1, opaque): below 1 it's see-through, drawn over the pane's other layers.
+    pub fn opacity(self, opacity: f64) -> Self {
+        self.param("opacity", opacity)
+    }
     pub fn flat(self, on: bool) -> Self {
         self.param("flat", on)
     }
