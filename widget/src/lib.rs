@@ -252,6 +252,7 @@ pub struct Setup {
     panes: Option<Vec<f64>>,
     layout: Option<Vec<[f64; 4]>>,
     links: Vec<Vec<u32>>,
+    wheel_zoom: bool,
     keep_picks: bool,
 }
 
@@ -321,6 +322,12 @@ impl Setup {
         self.layout = Some(rects.to_vec());
         self
     }
+    /// Zoom on plain scrolling over the figure (by default only a pinch, or ctrl/cmd and scrolling, zooms, so
+    /// scrolling the page past the figure doesn't).
+    pub fn wheel_zoom(mut self) -> Self {
+        self.wheel_zoom = true;
+        self
+    }
     /// Panes that turn and zoom together (as one camera); each keeps its own fit, so each turns about its own
     /// center. Call once per group.
     pub fn link(mut self, panes: &[u32]) -> Self {
@@ -353,6 +360,7 @@ impl Setup {
             "panes": self.panes,
             "layout": self.layout,
             "links": self.links,
+            "wheelZoom": self.wheel_zoom,
             "keepPicks": self.keep_picks,
         })
     }

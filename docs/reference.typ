@@ -41,7 +41,7 @@ message as the result). So a page and Typst run the same file. `wgw-widget` impl
   name: `[min, max, start, step?, "log"?]` for a slider (with `"log"`, it moves evenly in powers of ten), `true`
   or `false` for a checkbox, `"button"` for a push button (its value is how many times it has been pressed, from 0). `grid` is a boolean, or `{"toggle": on}` for a checkbox readers can use. `picked` is a
   vertex of the layer `mesh` picked from the start. `panes` are side-by-side panes' relative widths; `layout` places
-  panes anywhere, `[[x, y, width, height], ...]` as fractions of the figure from its top left; `links` are groups of
+  panes anywhere, `[[x, y, width, height], ...]` as fractions of the figure from its top left; `wheelZoom: true` zooms on plain scrolling over the figure; `links` are groups of
   panes that turn and zoom together, `[[1, 2, 3], ...]`, each pane keeping its own fit.
 - `scene(mesh, state)` returns a patch (below) for a state, JSON:
   `{controls: {name: value}, picks: [{vertex, layer, point, frame}], frame}`. For an animation it's asked for each

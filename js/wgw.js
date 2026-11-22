@@ -386,9 +386,10 @@ export class Viewer {
     };
     canvas.addEventListener("pointerup", release);
     canvas.addEventListener("pointercancel", release);
-    // Plain scrolling scrolls the page; a trackpad pinch (ctrl+wheel to the browser) or ctrl/cmd+scroll zooms.
+    // Plain scrolling scrolls the page; a trackpad pinch (ctrl+wheel to the browser) or ctrl/cmd+scroll zooms. A
+    // widget whose setup asks for it (wheelZoom) zooms on plain scrolling too.
     canvas.addEventListener("wheel", (e) => {
-      if (!e.ctrlKey && !e.metaKey) return;
+      if (!e.ctrlKey && !e.metaKey && !this.wheelZoom) return;
       e.preventDefault();
       core.zoom_by(Math.exp(e.deltaY * (e.deltaMode ? 0.05 : 0.01)));
       this.requestRender();
@@ -443,6 +444,7 @@ export class Viewer {
     const toggle = info.grid && typeof info.grid === "object";
     this.core.set_grid(toggle ? !!info.grid.toggle : !!info.grid);
     if (info.panes) this.core.set_pane_widths(Float32Array.from(info.panes));
+    this.wheelZoom = !!info.wheelZoom;
     if (info.layout) this.core.set_pane_layout(Float32Array.from(info.layout.flat()));  // [[x, y, w, h], ...]
     if (info.links) this.core.set_pane_links(Float32Array.from(info.links.flatMap((g) => [...g, -1])));  // [[1, 2], ...]
     if (info.picked != null) this.picks = [{ vertex: info.picked, layer: "mesh", point: null, frame: 0 }];  // its starting pick

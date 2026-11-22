@@ -113,4 +113,5 @@ Layers with `.pane(1)` are drawn in a second view beside the first, with its own
 Any number of panes can be placed anywhere: `.pane(k)` puts a layer in pane k, and
 `Setup::layout(&[[x, y, width, height], ...])` places each pane, as fractions of the figure from its top left
 (a large view on the left and a grid of small ones on the right, say). `Setup::link(&[1, 2, 3])` makes panes turn
-and zoom together, as one camera, while each keeps its own fit: a row of shapes, each turning about its own center.
+and zoom together, as one camera, while each keeps its own fit: a row of shapes, each turning about its own center. `Setup::wheel_zoom()` zooms on
+plain scrolling over the figure, rather than only on a pinch or ctrl/cmd and scrolling.
