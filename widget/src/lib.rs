@@ -252,6 +252,7 @@ pub struct Setup {
     panes: Option<Vec<f64>>,
     layout: Option<Vec<[f64; 4]>>,
     links: Vec<Vec<u32>>,
+    under: serde_json::Map<String, Value>,
     wheel_zoom: bool,
     keep_picks: bool,
 }
@@ -322,6 +323,12 @@ impl Setup {
         self.layout = Some(rects.to_vec());
         self
     }
+    /// Put a control under a pane (side-by-side panes, `panes`): the controls under each pane stacked in a column as
+    /// wide as the pane, rather than in the shared row.
+    pub fn under(mut self, control: &str, pane: u32) -> Self {
+        self.under.insert(control.into(), json!(pane));
+        self
+    }
     /// Zoom on plain scrolling over the figure (by default only a pinch, or ctrl/cmd and scrolling, zooms, so
     /// scrolling the page past the figure doesn't).
     pub fn wheel_zoom(mut self) -> Self {
@@ -361,6 +368,7 @@ impl Setup {
             "layout": self.layout,
             "links": self.links,
             "wheelZoom": self.wheel_zoom,
+            "under": if self.under.is_empty() { Value::Null } else { Value::Object(self.under.clone()) },
             "keepPicks": self.keep_picks,
         })
     }

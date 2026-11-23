@@ -1,7 +1,7 @@
 // Widgets: WebAssembly modules (written in Rust with wgw-widget, or anything that compiles to WebAssembly). A
 // widget exports two functions, in Typst's plugin protocol, so the same file runs here and in a Typst document:
 //
-//   setup(mesh)         -> JSON: {controls, frames, fps, loop, grid, picked, panes, layout, links, wheelZoom, keepPicks}
+//   setup(mesh)         -> JSON: {controls, frames, fps, loop, grid, picked, panes, layout, links, under, wheelZoom, keepPicks}
 //   scene(mesh, state)  -> a patch (see wgw-scene's patch.rs): the layers for a state, {controls, picks, frame}
 //
 // `mesh` is the figure's mesh file, if it has one apart from the widget (empty after the first call: the widget

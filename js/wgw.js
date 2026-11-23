@@ -78,6 +78,8 @@ const STYLE = `
 .wgw-status:empty{display:none}
 .wgw-controls{display:flex;flex-wrap:wrap;justify-content:center;gap:6px 18px;font:13px ui-monospace,monospace}
 .wgw-controls:empty{display:none}
+.wgw-controls .wgw-columns{display:grid;flex-basis:100%;gap:6px 18px}
+.wgw-controls .wgw-column{display:flex;flex-direction:column;align-items:center;gap:6px}
 .wgw canvas,.wgw-controls{transition:opacity .3s}
 .wgw.wgw-loading canvas,.wgw.wgw-loading .wgw-controls{opacity:0;pointer-events:none}
 .wgw-credit{position:absolute;top:8px;right:10px;display:inline-flex;align-items:center;gap:4px;font:11px ui-monospace,monospace;color:inherit;opacity:.45;text-decoration:none}
@@ -448,9 +450,26 @@ export class Viewer {
     if (info.layout) this.core.set_pane_layout(Float32Array.from(info.layout.flat()));  // [[x, y, w, h], ...]
     if (info.links) this.core.set_pane_links(Float32Array.from(info.links.flatMap((g) => [...g, -1])));  // [[1, 2], ...]
     if (info.picked != null) this.picks = [{ vertex: info.picked, layer: "mesh", point: null, frame: 0 }];  // its starting pick
+    this.under = info.under || null;  // {control: pane}: controls set under their pane, in columns as wide as the panes
+    this.paneWidths = info.panes || null;
     this.buildControls(controlInputs({ ...info.controls, ...(toggle ? { grid: !!info.grid.toggle } : {}) }));
     this.revealWhenIdle = true;  // once its first scene is drawn
     this.update(true);
+  }
+
+  // Where a control goes: under its pane, when the widget says so (a column per side-by-side pane, controls stacked),
+  // else the shared row.
+  controlHome(name) {
+    if (!this.under || !(name in this.under)) return this.controlsEl;
+    if (!this.columnsEl) {
+      const panes = Math.max(...Object.values(this.under)) + 1;
+      const widths = this.paneWidths && this.paneWidths.length >= panes ? this.paneWidths : Array(panes).fill(1);
+      this.columnsEl = Object.assign(document.createElement("div"), { className: "wgw-columns" });
+      this.columnsEl.style.gridTemplateColumns = widths.slice(0, panes).map((w) => `${w}fr`).join(" ");
+      this.columns = widths.slice(0, panes).map(() => this.columnsEl.appendChild(Object.assign(document.createElement("div"), { className: "wgw-column" })));
+      this.controlsEl.appendChild(this.columnsEl);
+    }
+    return this.columns[this.under[name]] || this.controlsEl;
   }
 
   buildControls(spec) {
@@ -459,7 +478,7 @@ export class Viewer {
         const button = Object.assign(document.createElement("button"), { type: "button", textContent: name });
         this.controls[name] = 0;
         button.addEventListener("click", () => { this.controls[name] += 1; this.update(false); });
-        this.controlsEl.appendChild(button);
+        this.controlHome(name).appendChild(button);
         continue;
       }
       const label = document.createElement("label"), input = document.createElement("input"), output = document.createElement("output");
@@ -486,7 +505,7 @@ export class Viewer {
         if (input.type !== "checkbox") { output.textContent = show(value); fill(input); }
         this.update(false);
       });
-      this.controlsEl.appendChild(label);
+      this.controlHome(name).appendChild(label);
     }
   }
 
