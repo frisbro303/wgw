@@ -79,7 +79,7 @@ const STYLE = `
 .wgw-controls{display:flex;flex-wrap:wrap;justify-content:center;gap:6px 18px;font:13px ui-monospace,monospace}
 .wgw-controls:empty{display:none}
 .wgw-controls .wgw-columns{display:grid;flex-basis:100%;gap:6px 18px}
-.wgw-controls .wgw-column{display:flex;flex-direction:column;align-items:center;gap:6px}
+.wgw-controls .wgw-column{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px}
 .wgw canvas,.wgw-controls{transition:opacity .3s}
 .wgw.wgw-loading canvas,.wgw.wgw-loading .wgw-controls{opacity:0;pointer-events:none}
 .wgw-credit{position:absolute;top:8px;right:10px;display:inline-flex;align-items:center;gap:4px;font:11px ui-monospace,monospace;color:inherit;opacity:.45;text-decoration:none}
